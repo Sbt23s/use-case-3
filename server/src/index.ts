@@ -62,6 +62,7 @@ app.get('/api/health', (_req, res) => {
   });
 });
 
+
 // The real-time stream authenticates from a query parameter (EventSource
 // cannot set headers), so it is mounted before header-only authentication.
 app.use('/api/cp', writeRateLimit, cpRouter);
@@ -82,7 +83,32 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
   res.status(500).json({ error: 'Internal server error' });
 });
 
-app.listen(PORT, () => {
-  console.log(`Citizen Petition AI POC - API on http://localhost:${PORT}`);
-  void tick();
-});
+function startServer(port: number, retries = 5): void {
+  const server = app.listen(port, '0.0.0.0', () => {
+    console.log(`Citizen Petition AI POC - API on http://localhost:${port}`);
+    void tick();
+  });
+
+  server.on('error', (err: any) => {
+    if (err.code === 'EADDRINUSE' && retries > 0) {
+      console.warn(`[server] Port ${port} busy, retrying in 800ms (${retries} retries left)...`);
+      setTimeout(() => {
+        try { server.close(); } catch {}
+        startServer(port, retries - 1);
+      }, 800);
+    } else {
+      console.error('[server error]', err);
+    }
+  });
+
+  process.on('uncaughtException', (err) => {
+    console.error('[server uncaughtException]', err);
+  });
+  process.on('unhandledRejection', (reason) => {
+    console.error('[server unhandledRejection]', reason);
+  });
+}
+
+startServer(PORT);
+
+

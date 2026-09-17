@@ -81,38 +81,94 @@
 
 /* ---------------- header ---------------- */
 .poc-header {
-  background: var(--g-600); color: #fff;
+  background: #ffffff; color: #0f172a;
+  border-bottom: 3.5px solid #facc15;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05), 0 1px 0 rgba(234, 179, 8, 0.2);
   display: flex; align-items: center; gap: 14px;
-  padding: 0 22px; height: 60px; position: sticky; top: 0; z-index: 40;
+  padding: 0 22px; height: 62px; position: sticky; top: 0; z-index: 40;
 }
 .poc-header .mark {
-  width: 34px; height: 34px; border-radius: 8px; background: rgba(255,255,255,.16);
-  display: grid; place-items: center; font-size: 17px; border: 1px solid rgba(255,255,255,.26);
+  width: 36px; height: 36px; border-radius: 8px; background: #fef9c3;
+  display: grid; place-items: center; font-size: 18px; border: 1px solid #fde047;
+  color: #854d0e; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
-.poc-header .title { font-weight: 650; font-size: 15.5px; line-height: 1.2; }
-.poc-header .sub { font-size: 11.5px; opacity: .82; }
+.poc-header .title { font-weight: 700; font-size: 16px; line-height: 1.2; color: #0f172a; letter-spacing: -0.01em; }
+.poc-header .sub { font-size: 12px; color: #64748b; }
 .poc-header .grow { flex: 1; }
-.poc-header .who { text-align: right; font-size: 12px; line-height: 1.35; }
-.poc-header .who b { display: block; font-size: 13px; }
+.poc-header .who { text-align: right; font-size: 12px; line-height: 1.35; color: #64748b; }
+.poc-header .who b { display: block; font-size: 13.5px; color: #0f172a; font-weight: 700; }
 .poc-header button {
-  background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.3);
-  color: #fff; padding: 6px 13px; border-radius: var(--radius);
+  background: #ffffff; border: 1px solid #e2e8f0;
+  color: #1e293b; padding: 7px 14px; border-radius: var(--radius);
   font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  transition: all 0.15s ease;
 }
-.poc-header button:hover { background: rgba(255,255,255,.24); }
+.poc-header button:hover {
+  background: #fefce8;
+  border-color: #facc15;
+  color: #854d0e;
+}
+.poc-header .ai-btn {
+  background: #fefce8;
+  border: 1px solid #fde047;
+  color: #854d0e;
+}
+.poc-header .ai-btn:hover {
+  background: #fef9c3;
+  border-color: #facc15;
+  color: #713f12;
+}
+
+/* Segmented Language Toggle in Light Navbar */
+.poc-header .lang-toggle {
+  display: inline-flex;
+  align-items: center;
+  background: #f1f5f9;
+  padding: 3px;
+  border-radius: 20px;
+  border: 1px solid #e2e8f0;
+  gap: 2px;
+}
+.poc-header .lang-toggle button {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 4px 12px;
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.poc-header .lang-toggle button:hover {
+  background: #e2e8f0;
+  border: none;
+  color: #0f172a;
+}
+.poc-header .lang-toggle button.on {
+  background: #ffffff;
+  border: none;
+  color: #0f172a;
+  font-weight: 700;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
 
 /* ---------------- nav ---------------- */
 .poc-nav {
-  background: var(--g-50); border-bottom: 1px solid var(--line);
+  background: #ffffff; border-bottom: 1px solid #e2e8f0;
   display: flex; gap: 2px; padding: 0 22px; overflow-x: auto;
 }
 .poc-nav button {
   background: none; border: 0; border-bottom: 3px solid transparent;
   padding: 12px 16px; font: inherit; font-size: 13.5px; font-weight: 600;
   color: var(--ink-2); cursor: pointer; white-space: nowrap;
+  transition: all .15s ease;
 }
-.poc-nav button:hover { color: var(--g-700); background: var(--g-100); }
-.poc-nav button.on { color: var(--g-700); border-bottom-color: var(--g-500); }
+.poc-nav button:hover { color: #0f172a; background: rgba(0, 0, 0, .03); }
+.poc-nav button.on { color: #0f172a; border-bottom-color: #eab308; }
 .poc-nav .live {
   margin-left: auto; display: flex; align-items: center; gap: 7px;
   font-size: 12px; color: var(--ink-3); padding: 0 4px;
@@ -367,29 +423,32 @@
 /* Back control on the Copilot header: white on green, so it reads as the way
    out of a full-screen view rather than another action in the bar. */
 .poc-header .btn.back {
-  background: #fff; color: var(--g-700);
-  border: 1px solid #fff; font-weight: 600;
+  background: #27272a; color: #fff;
+  border: 1px solid rgba(255, 255, 255, .16); font-weight: 600;
   padding: 6px 14px; margin-right: 4px; flex: 0 0 auto;
+  border-radius: var(--radius);
+  transition: background .15s;
 }
-.poc-header .btn.back:hover { background: var(--g-50); }
+.poc-header .btn.back:hover { background: #3f3f46; }
 
 /* ===================================================== language toggle */
 /*
- * Two pill buttons in the header. Sits on the green bar in the console and on
+ * Two pill buttons in the header. Sits on the dark bar in the console and on
  * white at the login screen, so both states are defined explicitly.
  */
 .lang-toggle {
   display: inline-flex; gap: 0; flex: 0 0 auto;
-  border: 1px solid rgba(255, 255, 255, .55);
+  border: 1px solid #e2e8f0;
+  background: #f1f5f9;
   border-radius: 20px; overflow: hidden; margin-right: 12px;
 }
 .lang-toggle button {
   border: 0; background: transparent; cursor: pointer;
   padding: 5px 13px; font-size: 12.5px; font-weight: 600;
-  color: #fff; transition: background .15s, color .15s;
+  color: #64748b; transition: background .15s, color .15s;
 }
-.lang-toggle button:hover { background: rgba(255, 255, 255, .18); }
-.lang-toggle button.on { background: #fff; color: var(--g-700); }
+.lang-toggle button:hover { background: rgba(0, 0, 0, .04); color: #0f172a; }
+.lang-toggle button.on { background: #ffffff; color: #0f172a; font-weight: 700; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
 
 /* On a white surface (the login card) the colours invert. */
 .poc-login .lang-toggle { border-color: var(--line); margin-right: 0; }
@@ -1147,13 +1206,18 @@ html[lang="ta"] .poc { line-height: 1.6; }
 /* The AI model button in the console header. Small and quiet: it is
    configuration, not part of the daily workflow. */
 .poc-header .ai-btn {
-  border: 1px solid rgba(255, 255, 255, .35);
-  background: rgba(255, 255, 255, .1);
-  color: #fff; border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, .16);
+  background: rgba(255, 255, 255, .08);
+  color: #f4f4f5; border-radius: 8px;
   padding: 5px 11px; font-size: 12px; cursor: pointer;
   white-space: nowrap;
+  transition: background .15s, border-color .15s, color .15s;
 }
-.poc-header .ai-btn:hover { background: rgba(255, 255, 255, .2); }
+.poc-header .ai-btn:hover {
+  background: rgba(255, 255, 255, .16);
+  border-color: rgba(255, 255, 255, .28);
+  color: #fff;
+}
 
 /* ===================================== Next steps (dynamic case workflow) */
 /*

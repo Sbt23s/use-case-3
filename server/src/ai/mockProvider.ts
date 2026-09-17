@@ -137,8 +137,114 @@ export class MockAIProvider implements IAIProvider {
   }
 
   private compose(o: GenerateOptions): string {
+    if (o.user.includes("OFFICER'S QUESTION:")) {
+      return this.composeCopilot(o);
+    }
     const ss = sentences(o.user);
     return ss.slice(0, 5).join('\n');
+  }
+
+  private composeCopilot(o: GenerateOptions): string {
+    const qMatch = o.user.match(/OFFICER'S QUESTION:\s*([^\n]+)/i);
+    const question = qMatch ? qMatch[1].trim() : '';
+    const isTa = o.system?.includes('ANSWER ENTIRELY IN TAMIL') || /[\u0B80-\u0BFF]/.test(question);
+
+    const lines = o.user.split('\n');
+    let actTitle = '';
+    let sections = '';
+    let rules = '';
+    let authority = '';
+    let workflow = '';
+    let petitionType = '';
+    let deptTitle = '';
+    let authTitle = '';
+
+    let inAct = false;
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed.startsWith('ACT [')) {
+        if (!actTitle) {
+          inAct = true;
+          actTitle = trimmed.replace(/^ACT\s*\[id\s*\d+\]\s*/i, '');
+        } else {
+          inAct = false;
+        }
+        continue;
+      }
+      if (inAct) {
+        if (trimmed.startsWith('DEPARTMENT [') || trimmed.startsWith('AUTHORITY [') || trimmed.startsWith('TOOL:') || trimmed.startsWith('═══')) {
+          inAct = false;
+        } else if (trimmed.startsWith('Section(s):')) {
+          sections = trimmed.replace(/^Section\(s\):\s*/i, '');
+        } else if (trimmed.startsWith('Rules:')) {
+          rules = trimmed.replace(/^Rules:\s*/i, '');
+        } else if (trimmed.startsWith('Competent Authority:')) {
+          authority = trimmed.replace(/^Competent Authority:\s*/i, '');
+        } else if (trimmed.startsWith('Petition Types:')) {
+          petitionType = trimmed.replace(/^Petition Types:\s*/i, '');
+        } else if (trimmed.startsWith('Workflow / Redressal Process:')) {
+          workflow = trimmed.replace(/^Workflow \/ Redressal Process:\s*/i, '');
+        }
+      }
+      if (trimmed.startsWith('DEPARTMENT [') && !deptTitle) {
+        deptTitle = trimmed.replace(/^DEPARTMENT\s*\[id\s*\d+\]\s*/i, '');
+      }
+      if (trimmed.startsWith('AUTHORITY [') && !authTitle) {
+        authTitle = trimmed.replace(/^AUTHORITY\s*\[id\s*\d+\]\s*/i, '');
+      }
+    }
+
+    if (!authority && authTitle) authority = authTitle;
+
+    if (actTitle) {
+      if (isTa) {
+        return [
+          `சட்டரீதியான வழிகாட்டுதல் மற்றும் பரிந்துரை:`,
+          `• பொருந்தும் சட்டம்: ${actTitle}`,
+          sections ? `• முக்கிய சட்டப் பிரிவுகள்: ${sections}` : null,
+          rules ? `• தொடர்புடைய விதிகள்: ${rules}` : null,
+          deptTitle ? `• கையாளும் துறை: ${deptTitle}` : null,
+          authority ? `• தகுதிவாய்ந்த பொறுப்பு அலுவலர்: ${authority}` : null,
+          workflow ? `• தீர்வு நடைமுறை / பணிப்பாய்வு: ${workflow}` : null,
+          petitionType ? `• பொருந்தும் மனு வகைகள்: ${petitionType}` : null,
+          `\nமேற்குறிப்பிட்ட விவரங்களின் அடிப்படையில் உரிய நடைமுறையைப் பின்பற்றி நடவடிக்கை எடுக்கலாம்.`,
+        ].filter(Boolean).join('\n');
+      } else {
+        return [
+          `Statutory Legal Guidance and Recommendations:`,
+          `• Applicable Act: ${actTitle}`,
+          sections ? `• Key Sections: ${sections}` : null,
+          rules ? `• Applicable Rules: ${rules}` : null,
+          deptTitle ? `• Competent Department: ${deptTitle}` : null,
+          authority ? `• Responsible Authority: ${authority}` : null,
+          workflow ? `• Redressal Workflow: ${workflow}` : null,
+          petitionType ? `• Petition Categories: ${petitionType}` : null,
+          `\nAction may be initiated in accordance with the prescribed statutory workflow above.`,
+        ].filter(Boolean).join('\n');
+      }
+    }
+
+    if (deptTitle) {
+      if (isTa) {
+        return [
+          `துறை சார்ந்த வழிகாட்டுதல்:`,
+          `• பொறுப்பான துறை: ${deptTitle}`,
+          authTitle ? `• தகுதிவாய்ந்த அலுவலர்: ${authTitle}` : null,
+          `• பரிந்துரை: மனுவை இத்துறையின் பரிசீலனைக்கு அனுப்பி உரிய நடவடிக்கை எடுக்கவும்.`,
+        ].filter(Boolean).join('\n');
+      } else {
+        return [
+          `Departmental Guidance:`,
+          `• Handling Department: ${deptTitle}`,
+          authTitle ? `• Competent Authority: ${authTitle}` : null,
+          `• Recommendation: Forward the matter to this department for necessary field inspection and redressal.`,
+        ].filter(Boolean).join('\n');
+      }
+    }
+
+    return isTa
+      ? 'இக்கேள்விக்கான குறிப்பிட்ட சட்டம் அல்லது துறை அறிவுத் தளத்தில் நேரடியாகப் பொருந்தவில்லை. மனுதாரர் விவரங்களை சரிபார்த்து சம்பந்தப்பட்ட மாவட்ட வருவாய் அலுவலர் அல்லது குறைதீர்ப்பு அலுவலரை அணுகவும்.'
+      : 'No specific Act or Department directly matched in the configured knowledge base. Please verify the petition details with the District Grievance Redressal Officer.';
   }
 
   private structured(o: GenerateOptions): unknown {

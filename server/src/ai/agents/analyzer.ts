@@ -454,7 +454,9 @@ export async function runAnalysis(
   const acts = db.prepare('SELECT * FROM kb_act WHERE active = 1').all() as any[];
   const actScored = acts.map((a) => {
     const recordText = [
-      a.keywords, a.applies_when, a.summary, a.full_title, a.short_name,
+      a.keywords, a.keywords_ta, a.petition_type, a.rules, a.section,
+      a.applies_when, a.applies_when_ta, a.summary,
+      a.full_title, a.full_title_ta, a.short_name, a.short_name_ta,
     ].filter(Boolean).join(' . ');
     const sim = similarity(corpus, concepts, recordText);
 
@@ -488,7 +490,7 @@ export async function runAnalysis(
    */
   for (const cand of actScored) {
     const recordConcepts = detectConcepts(
-      [cand.row.keywords, cand.row.applies_when, cand.row.summary].filter(Boolean).join(' . '),
+      [cand.row.keywords, cand.row.keywords_ta, cand.row.petition_type, cand.row.rules, cand.row.applies_when, cand.row.summary].filter(Boolean).join(' . '),
     );
     const focus = recordConcepts.length
       ? cand.sim.sharedConcepts.length / recordConcepts.length
@@ -547,6 +549,16 @@ export async function runAnalysis(
     })).filter((x) => x.sim.score >= 8 && x.sim.sharedConcepts.length > 0)
       .sort((x, y) => y.sim.score - x.sim.score);
     section = secScored[0]?.row ?? null;
+    if (!section && topAct.row.section) {
+      section = {
+        id: null,
+        section_no: topAct.row.section.split('(')[0]?.trim() || 'Key Provision',
+        heading: topAct.row.section,
+        heading_ta: topAct.row.section,
+        text: `${topAct.row.section} (${topAct.row.rules || topAct.row.short_name})`,
+        text_ta: `${topAct.row.section} (${topAct.row.rules || topAct.row.short_name_ta || topAct.row.short_name})`,
+      };
+    }
   }
 
   // ---------------- Department ----------------
@@ -648,6 +660,16 @@ export async function runAnalysis(
     }).sort((x, y) => y.score - x.score);
 
     authority = authScored[0]?.row ?? null;
+    if (!authority && topAct?.row?.authority) {
+      authority = {
+        id: null,
+        designation: topAct.row.authority,
+        designation_ta: topAct.row.authority_ta || topAct.row.authority,
+        office_name: topDept.row.name,
+        office_name_ta: topDept.row.name_ta,
+        jurisdiction_level: 'DISTRICT',
+      };
+    }
 
     // Escalation: a higher jurisdiction level in the same department.
     if (authority) {
@@ -843,6 +865,12 @@ export async function runAnalysis(
       `Confirm that ${actNameEn}${section ? `, section ${section.section_no}` : ''} is the correct provision for this matter.`,
       `${actNameTa}${section ? `, பிரிவு ${section.section_no}` : ''} இந்த விவகாரத்திற்கு சரியான விதி என்பதை உறுதிப்படுத்தவும்.`,
     ));
+    if (topAct.row.workflow) {
+      workflow.push(bi(
+        `Statutory redressal workflow: ${topAct.row.workflow}`,
+        `சட்டப்படியான தீர்வு நடைமுறை: ${topAct.row.workflow}`,
+      ));
+    }
   } else {
     workflow.push(bi(
       'Determine the applicable provision; the knowledge base did not match one.',

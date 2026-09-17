@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { pocApi } from './pocApi';
 import { AppFooter } from './AppFooter';
-import { useI18n } from '../lib/i18n';
+import { useI18n, LanguageToggle } from '../lib/i18n';
 
-export function PocLogin({ onLogin }: { onLogin: (token: string) => Promise<void> }) {
-  const { t } = useI18n();
+export function PocLogin({ onLogin }: { onLogin: (token: string, user?: any) => Promise<void> }) {
+  const { t, lang } = useI18n();
   const [username, setUsername] = useState('gro');
   const [password, setPassword] = useState('Officer@123');
   const [err, setErr] = useState('');
@@ -14,10 +14,16 @@ export function PocLogin({ onLogin }: { onLogin: (token: string) => Promise<void
     e.preventDefault();
     setErr(''); setBusy(true);
     try {
-      const r = await pocApi.post<{ token: string }>('/auth/login', { username, password });
-      await onLogin(r.token);
+      const r = await pocApi.post<{ token: string; user?: any }>('/auth/login', { username, password });
+      await onLogin(r.token, r.user);
     } catch (e: any) {
-      setErr(e.message ?? t('login.failed'));
+      if (e.status === 401 || e.message === 'Invalid username or password') {
+        setErr(t('login.failed'));
+      } else if (e.status >= 500 || e.message?.includes('500') || e.message?.includes('ECONNREFUSED')) {
+        setErr(lang === 'ta' ? 'சேவையகத்தை இணைக்க முடியவில்லை. தயவுசெய்து சிறிது நேரம் கழித்து மீண்டும் முயற்சிக்கவும்.' : 'Unable to reach the server. Please try again in a moment.');
+      } else {
+        setErr(e.message ?? t('login.failed'));
+      }
       setBusy(false);
     }
   };
@@ -26,6 +32,9 @@ export function PocLogin({ onLogin }: { onLogin: (token: string) => Promise<void
     <div className="poc">
       <div className="poc-login">
         <div className="box">
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+            <LanguageToggle />
+          </div>
           <div className="brand">
             <div className="mark">⚖</div>
             <div>
@@ -62,7 +71,7 @@ export function PocLogin({ onLogin }: { onLogin: (token: string) => Promise<void
               onClick={() => { setUsername('gro'); setPassword('Officer@123'); }}
             >
               <div className="r">{t('app.role')}</div>
-              <div className="u">A. Kavitha · gro / Officer@123</div>
+              <div className="u">{lang === 'ta' ? 'ஏ. கவிதா' : 'A. Kavitha'} · gro / Officer@123</div>
             </button>
           </div>
         </div>

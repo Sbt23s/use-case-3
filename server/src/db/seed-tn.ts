@@ -143,7 +143,7 @@ function seedUsers() {
 
   for (const [username, password, fullName, role] of [
     ['citizen1', 'Citizen@123', 'Lakshmi Ammal', 'CITIZEN'],
-    ['gro', 'Officer@123', 'A. Kavitha, Grievance Officer', 'GRIEVANCE_OFFICER'],
+    ['gro', 'Officer@123', 'A. Kavitha', 'GRIEVANCE_OFFICER'],
   ] as const) {
     const { hash, salt } = hashPassword(password);
     insUser.run(username, fullName, hash, salt);

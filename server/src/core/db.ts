@@ -2,6 +2,9 @@ import Database from 'better-sqlite3';
 import { readFileSync, mkdirSync, existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { randomBytes, scryptSync } from 'node:crypto';
+import { seed100Acts } from '../db/tn-100-acts.js';
+import { seedExpandedActs } from '../db/tn-expanded-acts.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = resolve(__dirname, '../../data');
@@ -11,6 +14,10 @@ if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
 
 export const db = new Database(DB_PATH);
 db.pragma('journal_mode = WAL');
+db.pragma('synchronous = NORMAL');
+db.pragma('busy_timeout = 5000');
+db.pragma('cache_size = -20000');
+db.pragma('temp_store = MEMORY');
 db.pragma('foreign_keys = ON');
 
 export function initSchema(): void {
@@ -47,6 +54,21 @@ export function initSchema(): void {
   addColumnIfMissing('cp_document', 'extracted_details', 'TEXT');
   // Tamil rendering of an Act's required-documents list.
   addColumnIfMissing('kb_act', 'required_documents_ta', 'TEXT');
+  addColumnIfMissing('kb_act', 'rules', 'TEXT');
+  addColumnIfMissing('kb_act', 'section', 'TEXT');
+  addColumnIfMissing('kb_act', 'authority', 'TEXT');
+  addColumnIfMissing('kb_act', 'petition_type', 'TEXT');
+  addColumnIfMissing('kb_act', 'keywords_ta', 'TEXT');
+  addColumnIfMissing('kb_act', 'workflow', 'TEXT');
+  addColumnIfMissing('kb_act', 'official_source', 'TEXT');
+  addColumnIfMissing('kb_act', 'last_verified_date', 'TEXT');
+  addColumnIfMissing('kb_act', 'short_name_ta', 'TEXT');
+  addColumnIfMissing('kb_act', 'full_title_ta', 'TEXT');
+  addColumnIfMissing('kb_act', 'applies_when_ta', 'TEXT');
+  addColumnIfMissing('kb_act', 'verification_status', "TEXT NOT NULL DEFAULT 'VERIFIED'");
+  addColumnIfMissing('kb_department', 'name_ta', 'TEXT');
+  addColumnIfMissing('kb_department', 'responsibilities_ta', 'TEXT');
+  addColumnIfMissing('kb_section', 'heading_ta', 'TEXT');
 
   /*
    * Where the file has got to in the office procedure.
@@ -82,7 +104,44 @@ export function initSchema(): void {
     );
     CREATE INDEX IF NOT EXISTS ix_wf_history_petition
       ON cp_workflow_history(petition_id, id);
+    CREATE INDEX IF NOT EXISTS ix_cp_origin_created
+      ON cp_petition(origin, created_at DESC);
+    CREATE INDEX IF NOT EXISTS ix_cp_analysis_status
+      ON cp_petition(analysis_status);
+    CREATE INDEX IF NOT EXISTS ix_cp_verified
+      ON cp_petition(officer_verified);
+    CREATE INDEX IF NOT EXISTS ix_cpana_petition_id
+      ON cp_analysis(petition_id, id DESC);
+    CREATE INDEX IF NOT EXISTS ix_cpdoc_petition_id
+      ON cp_document(petition_id);
+    UPDATE app_user SET full_name = 'A. Kavitha' WHERE username = 'gro';
   `);
+
+  // Ensure default Grievance Officer demo account exists and has the correct password
+  try {
+    const groUser = db.prepare("SELECT id FROM app_user WHERE username = 'gro'").get() as any;
+    if (!groUser) {
+      const salt = randomBytes(16).toString('hex');
+      const hash = scryptSync('Officer@123', salt, 64).toString('hex');
+      db.prepare("INSERT INTO app_user (username, full_name, password_hash, password_salt, active) VALUES ('gro', 'A. Kavitha', ?, ?, 1)").run(hash, salt);
+    }
+    db.prepare("INSERT OR IGNORE INTO role (code, name, description) VALUES ('GRIEVANCE_OFFICER', 'Grievance Officer', 'Grievance Officer Role')").run();
+    db.prepare("INSERT OR IGNORE INTO user_role (user_id, role_id) SELECT u.id, r.id FROM app_user u, role r WHERE u.username = 'gro' AND r.code = 'GRIEVANCE_OFFICER'").run();
+  } catch (e) {
+    console.error('[db] ensure gro user error:', e);
+  }
+
+  try {
+    seed100Acts(db);
+  } catch (e) {
+    console.error('[db] seed100Acts error:', e);
+  }
+
+  try {
+    seedExpandedActs(db);
+  } catch (e) {
+    console.error('[db] seedExpandedActs error:', e);
+  }
 }
 
 /** Run fn inside a transaction. */

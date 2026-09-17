@@ -212,6 +212,8 @@ export const STRINGS: Dict = {
   'dash.phaseOcr':      { en: 'Reading the document…', ta: 'ஆவணம் படிக்கப்படுகிறது…' },
   'dash.phaseAnalysing':{ en: 'AI is analysing the petition…', ta: 'AI மனுவை பகுப்பாய்வு செய்கிறது…' },
   'dash.reference':     { en: 'Reference',    ta: 'மனு எண்' },
+  'dash.newChip':       { en: 'NEW',          ta: 'புதிய' },
+  'dash.analysingText': { en: 'analysing…',   ta: 'பகுப்பாய்வு செய்கிறது…' },
   'detail.verifiedBy':  { en: 'Verified by officer', ta: 'அலுவலரால் சரிபார்க்கப்பட்டது' },
   'detail.runAnalysis': { en: 'Run AI analysis', ta: 'AI பகுப்பாய்வை இயக்கு' },
   'detail.analysing':   { en: 'Analysing…',     ta: 'பகுப்பாய்வு செய்கிறது…' },

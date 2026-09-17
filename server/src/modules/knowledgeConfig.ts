@@ -61,7 +61,7 @@ const ActSchema = z.object({
 kbRouter.get('/acts', (req, res) => {
   const q = (req.query as any).q as string | undefined;
   const rows = search('kb_act', q,
-    ['short_name', 'full_title', 'act_number', 'keywords', 'summary', 'applies_when']) as any[];
+    ['short_name', 'short_name_ta', 'full_title', 'full_title_ta', 'act_number', 'keywords', 'keywords_ta', 'rules', 'section', 'authority', 'petition_type', 'summary', 'applies_when']) as any[];
   for (const r of rows) {
     r.section_count = (db.prepare(
       'SELECT COUNT(*) n FROM kb_section WHERE act_id = ?',

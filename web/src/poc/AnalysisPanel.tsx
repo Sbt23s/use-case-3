@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { pct } from './pocApi';
 import { useI18n } from '../lib/i18n';
+import { displayName, displayAddress, transliterate, transliterateToTamil, hasTamil, hasLatin, KNOWN_EN_TO_TA } from '../lib/translit';
 
 /**
  * AI analysis result, in Tamil and English.
@@ -28,7 +29,63 @@ export function AnalysisPanel({ d }: { d: any }) {
 
   // One phrase book for the whole console; see lib/i18n.tsx.
   const t = (k: string) => tr(`an.${k}`);
-  const v = (b: Bilingual | undefined | null, fallback = '—') => b ? (b[lang] || b.en || fallback) : fallback;
+  const v = (b: Bilingual | undefined | null, fallback = '—') => {
+    if (!b) return fallback;
+    let text = String(b[lang] || (lang === 'ta' ? b.ta : b.en) || b.en || b.ta || fallback).trim();
+    if (!text) return fallback;
+
+    if (lang === 'en') {
+      if (hasTamil(text)) {
+        text = text.replace(/People named:\s*(.+)$/i, (_m, list) => {
+          const trNames = list.split(',').map((n: string) => displayName(n.trim(), 'en')).join(', ');
+          return `People named: ${trNames}`;
+        }).replace(/Places mentioned:\s*(.+)$/i, (_m, list) => {
+          const trPlaces = list.split(',').map((p: string) => displayAddress(p.trim(), 'en')).join(', ');
+          return `Places mentioned: ${trPlaces}`;
+        }).replace(/Senior citizen — as stated:\s*(.+)$/i, (_m, rest) => {
+          return hasTamil(rest) ? `Senior citizen — as stated: ${transliterate(rest)}` : text;
+        });
+
+        if (hasTamil(text)) {
+          text = transliterate(text);
+        }
+      }
+    } else if (lang === 'ta') {
+      if (hasLatin(text)) {
+        text = text.replace(/குறிப்பிடப்பட்ட நபர்கள்:\s*(.+)$/i, (_m, list) => {
+          const trNames = list.split(',').map((n: string) => displayName(n.trim(), 'ta')).join(', ');
+          return `குறிப்பிடப்பட்ட நபர்கள்: ${trNames}`;
+        }).replace(/குறிப்பிடப்பட்ட இடங்கள்:\s*(.+)$/i, (_m, list) => {
+          const trPlaces = list.split(',').map((p: string) => displayAddress(p.trim(), 'ta')).join(', ');
+          return `குறிப்பிடப்பட்ட இடங்கள்: ${trPlaces}`;
+        });
+
+        const lower = text.trim().toLowerCase();
+        const known = KNOWN_EN_TO_TA[lower];
+        if (known) {
+          text = known;
+        } else {
+          text = text
+            .replace(/\bSec\.?\s*(\d+)/gi, 'பிரிவு $1')
+            .replace(/\bSection\s*(\d+)/gi, 'பிரிவு $1')
+            .replace(/Encroachment on public roads/gi, 'பொதுச் சாலைகளில் ஆக்கிரமிப்பு')
+            .replace(/Powers of inspection/gi, 'ஆய்வு அதிகாரம்')
+            .replace(/Drinking water supply/gi, 'குடிநீர் விநியோகம்')
+            .replace(/Panchayat audit and dissolution/gi, 'ஊராட்சி தணிக்கை மற்றும் கலைப்பு')
+            .replace(/Claim for maintenance/gi, 'பராமரிப்பு கோரிக்கை')
+            .replace(/Tribunal order/gi, 'தீர்ப்பாய உத்தரவு')
+            .replace(/Rural Development\s*(?:&|and)\s*Panchayat Raj(?:\s*Department)?/gi, 'ஊரக வளர்ச்சி மற்றும் ஊராட்சித் துறை');
+
+          const taCount = (text.match(/[\u0B80-\u0BFF]/g) || []).length;
+          const enCount = (text.match(/[A-Za-z]/g) || []).length;
+          if (enCount > 0 && taCount === 0 && text.split(/\s+/).length <= 3) {
+            text = transliterateToTamil(text);
+          }
+        }
+      }
+    }
+    return text;
+  };
 
   if (!full) {
     // An analysis stored before the bilingual format was introduced.
@@ -130,8 +187,12 @@ export function AnalysisPanel({ d }: { d: any }) {
               <dl className="kv">
                 {full.entities.dates?.length > 0 && (<><dt>{t('entDates')}</dt><dd className="mono">{full.entities.dates.join(', ')}</dd></>)}
                 {full.entities.amounts?.length > 0 && (<><dt>{t('entAmounts')}</dt><dd className="mono">{full.entities.amounts.join(', ')}</dd></>)}
-                {full.entities.people?.length > 0 && (<><dt>{t('entPeople')}</dt><dd>{full.entities.people.join(', ')}</dd></>)}
-                {full.entities.places?.length > 0 && (<><dt>{t('entPlaces')}</dt><dd>{full.entities.places.join(', ')}</dd></>)}
+                {full.entities.people?.length > 0 && (
+                  <><dt>{t('entPeople')}</dt><dd>{full.entities.people.map((p: string) => displayName(p, lang)).join(', ')}</dd></>
+                )}
+                {full.entities.places?.length > 0 && (
+                  <><dt>{t('entPlaces')}</dt><dd>{full.entities.places.map((p: string) => displayAddress(p, lang)).join(', ')}</dd></>
+                )}
                 {full.entities.documents_mentioned?.length > 0 && (
                   <><dt>{t('entDocs')}</dt><dd>{full.entities.documents_mentioned.join(', ')}</dd></>
                 )}

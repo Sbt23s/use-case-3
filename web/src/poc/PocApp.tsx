@@ -8,6 +8,7 @@ import { AppFooter } from './AppFooter';
 import { CopilotPanel } from './CopilotPanel';
 import { AiSettingsDialog } from './AiSettingsDialog';
 import { useI18n, LanguageToggle } from '../lib/i18n';
+import { displayName } from '../lib/translit';
 
 /**
  * Grievance Management POC — Officer Console.
@@ -17,7 +18,7 @@ import { useI18n, LanguageToggle } from '../lib/i18n';
  * triggering AI analysis, and actioning the results.
  */
 export function PocApp() {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const [user, setUser] = useState<PocUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [copilot, setCopilot] = useState(false);
@@ -80,10 +81,18 @@ export function PocApp() {
 
   if (!user) {
     return (
-      <PocLogin onLogin={async (token) => {
+      <PocLogin onLogin={async (token, userObj) => {
         setPocToken(token);
-        const r = await pocApi.get<{ user: PocUser }>('/auth/me');
-        setUser(r.user);
+        if (userObj) {
+          setUser(userObj);
+        } else {
+          try {
+            const r = await pocApi.get<{ user: PocUser }>('/auth/me');
+            setUser(r.user);
+          } catch {
+            // fallback
+          }
+        }
       }} />
     );
   }
@@ -112,7 +121,7 @@ export function PocApp() {
           ⚙ {t('aim.title')}
         </button>
         <div className="who">
-          <b>{user.fullName}</b>
+          <b>{displayName(user.fullName.replace(/,\s*(Grievance Officer|குறைதீர்ப்பு அலுவலர்)/i, '').trim(), lang)}</b>
           {t('app.role')}
         </div>
         <button onClick={logout}>{t('common.signOut')}</button>

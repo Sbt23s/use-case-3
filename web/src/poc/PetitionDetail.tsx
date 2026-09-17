@@ -96,13 +96,35 @@ export function PetitionDetail({ petitionId, feed, onBack }: {
     if (!d) return;
     setPdfBusy(true); setPdfErr('');
     try {
-      const doc = d.documents?.[0] ?? null;
+      const docList = d.documents ?? [];
+      const attachments = await Promise.all(
+        docList.map(async (docItem: any) => ({
+          document: {
+            id: docItem.id,
+            file_name: docItem.file_name,
+            mime_type: docItem.mime_type,
+            ocr_status: docItem.ocr_status,
+            ocr_confidence: docItem.ocr_confidence,
+            extracted_text: docItem.ocr_corrected_text || docItem.extracted_text || null,
+          },
+          file: await fetchOriginal(docItem.id),
+        }))
+      );
+
+      const primaryDoc = attachments[0]?.document ?? (d.documents?.[0] ? {
+        id: d.documents[0].id,
+        file_name: d.documents[0].file_name,
+        mime_type: d.documents[0].mime_type,
+        ocr_status: d.documents[0].ocr_status,
+        ocr_confidence: d.documents[0].ocr_confidence,
+        extracted_text: d.documents[0].ocr_corrected_text || d.documents[0].extracted_text || null,
+      } : null);
+      const primaryFile = attachments[0]?.file ?? null;
+
       const { buildAnalysisReport } = await import('../lib/report');
       const pdf = await buildAnalysisReport({
         referenceNo: d.petition.reference_no,
         subject: d.petition.subject_display ?? d.petition.subject,
-        // Display text, not the raw enum: the report prints what it is given,
-        // and 'ANALYSED' in a Tamil document is the mixing this must avoid.
         status: t(`status.${d.petition.status}`),
         receivedAt: fmtTime(d.petition.created_at, lang),
         petitioner: {
@@ -112,22 +134,10 @@ export function PetitionDetail({ petitionId, feed, onBack }: {
           language: d.petition.language,
         },
         extracted: d.extracted_details ?? null,
-        document: doc ? {
-          id: doc.id,
-          file_name: doc.file_name,
-          mime_type: doc.mime_type,
-          ocr_status: doc.ocr_status,
-          ocr_confidence: doc.ocr_confidence,
-          extracted_text: doc.ocr_corrected_text || doc.extracted_text || null,
-        } : null,
-        /*
-         * The original file, fetched here so the report can carry it.
-         * A failure to fetch must not stop the report: the annexure page then
-         * says the document accompanies the report separately.
-         */
-        originalFile: doc ? await fetchOriginal(doc.id) : null,
+        document: primaryDoc,
+        originalFile: primaryFile,
+        attachments,
         analysis: d.analysis?.full ?? null,
-        // The report is produced in the language the console is set to.
         lang,
       });
       pdf.save(`${d.petition.reference_no}-analysis.pdf`);
@@ -184,7 +194,7 @@ export function PetitionDetail({ petitionId, feed, onBack }: {
       <div className="poc-head">
         <div className="grow">
           <h1><span className="mono">{p.reference_no}</span></h1>
-          <div className="lede">{p.subject}</div>
+          <div className="lede">{p.subject_display || p.subject}</div>
         </div>
         <span className={`poc-chip ${p.status === 'CLOSED' ? 'ok' : ''}`}>
           {t('status.' + p.status)}
@@ -347,8 +357,8 @@ function LetterTab({ d, onRefresh }: { d: any; onRefresh: () => void }) {
         <header><h3>{t('detail.asSubmitted')}</h3></header>
         <div className="body">
           <dl className="kv">
-            <dt>{t('detail.subject')}</dt><dd className="b">{d.petition.subject}</dd>
-            <dt>{t('detail.description')}</dt><dd style={{ whiteSpace: 'pre-wrap' }}>{d.petition.description}</dd>
+            <dt>{t('detail.subject')}</dt><dd className="b">{d.petition.subject_display || d.petition.subject}</dd>
+            <dt>{t('detail.description')}</dt><dd style={{ whiteSpace: 'pre-wrap' }}>{d.petition.description_display || d.petition.description}</dd>
           </dl>
         </div>
       </div>

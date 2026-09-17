@@ -46,7 +46,7 @@ function config() {
      */
     auth: (process.env.TRANSLATE_API_AUTH || 'bearer').trim().toLowerCase(),
     keyHeader: (process.env.TRANSLATE_API_KEY_HEADER || 'X-API-Key').trim(),
-    timeoutMs: Number(process.env.TRANSLATE_API_TIMEOUT_MS || 12000),
+    timeoutMs: Number(process.env.TRANSLATE_API_TIMEOUT_MS || 3500),
   };
 }
 

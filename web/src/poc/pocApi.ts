@@ -26,14 +26,29 @@ export class PocApiError extends Error {
 
 async function request<T>(method: string, path: string, body?: unknown, form?: FormData): Promise<T> {
   const token = getPocToken();
-  const res = await fetch(`/api${path}`, {
-    method,
-    headers: {
-      ...(form ? {} : body ? { 'Content-Type': 'application/json' } : {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: form ?? (body ? JSON.stringify(body) : undefined),
-  });
+  const headers: Record<string, string> = {
+    ...(form ? {} : body ? { 'Content-Type': 'application/json' } : {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+  const bodyData = form ?? (body ? JSON.stringify(body) : undefined);
+
+  let res: Response;
+  try {
+    res = await fetch(`/api${path}`, { method, headers, body: bodyData });
+    // If Vite proxy returns 500 (ECONNREFUSED) while running dev server, retry directly to backend
+    if (res.status >= 500 && window.location.port === '5173') {
+      const fallback = await fetch(`http://127.0.0.1:4000/api${path}`, { method, headers, body: bodyData }).catch(() => null);
+      if (fallback && (fallback.ok || fallback.status < 500)) {
+        res = fallback;
+      }
+    }
+  } catch (netErr) {
+    if (window.location.port === '5173') {
+      res = await fetch(`http://127.0.0.1:4000/api${path}`, { method, headers, body: bodyData });
+    } else {
+      throw netErr;
+    }
+  }
 
   const text = await res.text();
   let data: any;

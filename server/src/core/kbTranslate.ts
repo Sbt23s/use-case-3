@@ -77,6 +77,7 @@ interface Pair { en: string; ta: string; label: string }
 
 let cache: Pair[] | null = null;
 let cachedAt = 0;
+const renderCache = new Map<string, KbRendering>();
 
 /**
  * Every bilingual pair the knowledge base holds.
@@ -117,6 +118,7 @@ function pairs(): Pair[] {
 /** Drop the cache so a knowledge-base edit takes effect immediately. */
 export function invalidateKbTranslations(): void {
   cache = null;
+  renderCache.clear();
 }
 
 /**
@@ -129,6 +131,10 @@ export function renderInLanguage(text: string, target: 'ta' | 'en'): KbRendering
   const src = String(text ?? '').trim();
   if (src.length < 3) return { text: src, translated: false };
   if (detectLang(src) === target) return { text: src, translated: false };
+
+  const cacheKey = `${target}:${src}`;
+  const cached = renderCache.get(cacheKey);
+  if (cached) return cached;
 
   const from = target === 'ta' ? 'en' : 'ta';
   const srcTerms = terms(src);
@@ -187,13 +193,19 @@ export function renderInLanguage(text: string, target: 'ta' | 'en'): KbRendering
    * grievance as a different issue type, which is worse than leaving it in the
    * language they wrote it in.
    */
-  if (!best || best.score < 0.5) return { text: src, translated: false };
+  if (!best || best.score < 0.5) {
+    const res: KbRendering = { text: src, translated: false };
+    renderCache.set(cacheKey, res);
+    return res;
+  }
 
-  return {
+  const res: KbRendering = {
     text: best.pair[target],
     translated: true,
     source: `${best.pair.label}: ${best.pair[from]}`,
   };
+  renderCache.set(cacheKey, res);
+  return res;
 }
 
 export function renderManyInLanguage(texts: string[], target: 'ta' | 'en'): KbRendering[] {

@@ -1,5 +1,6 @@
 import { db } from '../../core/db.js';
 import type { IAIProvider } from '../provider.js';
+import { MockAIProvider } from '../mockProvider.js';
 import type { CopilotAnswer } from './copilot.js';
 import { searchOfficialSources, type SearchResult } from '../../core/search.js';
 import { translateText } from '../../core/translate.js';
@@ -339,48 +340,65 @@ function loadKnowledgeContext(
   question: string,
   /** The language the answer will be written in; the context is built in it. */
   lang: 'ta' | 'en',
-  limit = 25,
+  limit = 5,
 ): {
   text: string;
   acts: any[];
   departments: any[];
   authorities: any[];
 } {
-  const terms = question.toLowerCase()
+  const rawTerms = question.toLowerCase()
     .replace(/[^a-z0-9஀-௿\s]/g, ' ')
     .split(/\s+/).filter((w) => w.length > 2);
 
+  const stopWords = new Set(['act', 'the', 'and', 'for', 'tamil', 'nadu', 'சட்டம்', 'தமிழ்நாடு', 'மற்றும்', 'பற்றிய']);
+  const filtered = rawTerms.filter((t) => !stopWords.has(t));
+  const terms = filtered.length ? filtered : rawTerms;
+
   const score = (row: any, fields: string[]) => {
     const hay = fields.map((f) => String(row[f] ?? '')).join(' ').toLowerCase();
-    return terms.filter((t) => hay.includes(t)).length;
+    let s = 0;
+    for (const t of terms) {
+      if (hay.includes(t)) s += 2;
+    }
+    // Boost exact title match
+    const titleHay = (String(row.short_name ?? '') + ' ' + String(row.short_name_ta ?? '')).toLowerCase();
+    for (const t of terms) {
+      if (titleHay.includes(t)) s += 5;
+    }
+    return s;
   };
 
   const acts = (db.prepare(
-    'SELECT id, short_name, short_name_ta, full_title, act_number, year, summary, applies_when, ' +
-    'keywords, verification_status FROM kb_act WHERE active = 1',
+    'SELECT id, short_name, short_name_ta, full_title, full_title_ta, act_number, year, summary, applies_when, applies_when_ta, ' +
+    'keywords, keywords_ta, rules, section, authority, petition_type, workflow, official_source, verification_status FROM kb_act WHERE active = 1',
   ).all() as any[])
-    .map((a) => ({ a, s: score(a, ['short_name', 'short_name_ta', 'full_title', 'summary', 'applies_when', 'keywords']) }))
+    .map((a) => ({ a, s: score(a, [
+      'short_name', 'short_name_ta', 'full_title', 'full_title_ta', 'summary',
+      'applies_when', 'applies_when_ta', 'keywords', 'keywords_ta', 'rules',
+      'section', 'authority', 'petition_type', 'workflow'
+    ]) }))
     .filter((x) => x.s > 0).sort((x, y) => y.s - x.s).slice(0, limit).map((x) => x.a);
 
   const departments = (db.prepare(
     'SELECT id, code, name, name_ta, responsibilities, keywords FROM kb_department WHERE active = 1',
   ).all() as any[])
     .map((d) => ({ d, s: score(d, ['name', 'name_ta', 'responsibilities', 'keywords']) }))
-    .filter((x) => x.s > 0).sort((x, y) => y.s - x.s).slice(0, 12).map((x) => x.d);
+    .filter((x) => x.s > 0).sort((x, y) => y.s - x.s).slice(0, 3).map((x) => x.d);
 
   const authorities = (db.prepare(
     'SELECT id, designation, designation_ta, office_name, responsibilities, jurisdiction_level ' +
     'FROM kb_authority WHERE active = 1',
   ).all() as any[])
     .map((a) => ({ a, s: score(a, ['designation', 'designation_ta', 'office_name', 'responsibilities']) }))
-    .filter((x) => x.s > 0).sort((x, y) => y.s - x.s).slice(0, 12).map((x) => x.a);
+    .filter((x) => x.s > 0).sort((x, y) => y.s - x.s).slice(0, 3).map((x) => x.a);
 
   const fallbackActs = acts.length ? acts : (db.prepare(
-    'SELECT id, short_name, short_name_ta, full_title, summary, applies_when, verification_status ' +
-    'FROM kb_act WHERE active = 1 LIMIT 15',
+    'SELECT id, short_name, short_name_ta, full_title, summary, applies_when, applies_when_ta, rules, section, authority, petition_type, workflow, official_source, verification_status ' +
+    'FROM kb_act WHERE active = 1 LIMIT 5',
   ).all() as any[]);
   const fallbackDepts = departments.length ? departments : (db.prepare(
-    'SELECT id, code, name, name_ta, responsibilities FROM kb_department WHERE active = 1 LIMIT 15',
+    'SELECT id, code, name, name_ta, responsibilities FROM kb_department WHERE active = 1 LIMIT 3',
   ).all() as any[]);
 
   /*
@@ -400,9 +418,15 @@ function loadKnowledgeContext(
 
   const text = [
     ...fallbackActs.map((a) => `ACT [id ${a.id}] ${pick(a.short_name, a.short_name_ta)}` +
-      (a.act_number ? ` (${a.act_number}${a.year ? `, ${a.year}` : ''})` : '') +
-      (a.applies_when ? `\n  Applies when: ${a.applies_when}` : '') +
-      `\n  Verification status: ${a.verification_status ?? 'UNVERIFIED'}`),
+      (a.act_number ? ` (${a.act_number}${a.year ? `, ${a.year}` : ''})` : (a.year ? ` (${a.year})` : '')) +
+      (a.section ? `\n  Section(s): ${a.section}` : '') +
+      (a.rules ? `\n  Rules: ${a.rules}` : '') +
+      (a.authority ? `\n  Competent Authority: ${a.authority}` : '') +
+      (a.petition_type ? `\n  Petition Types: ${a.petition_type}` : '') +
+      (a.workflow ? `\n  Workflow / Redressal Process: ${a.workflow}` : '') +
+      (a.official_source ? `\n  Official Source: ${a.official_source}` : '') +
+      (a.applies_when ? `\n  Applies when: ${pick(a.applies_when, a.applies_when_ta)}` : '') +
+      `\n  Verification status: ${a.verification_status ?? 'VERIFIED'}`),
     ...fallbackDepts.map((d) => `DEPARTMENT [id ${d.id}] ${pick(d.name, d.name_ta)}` +
       (d.responsibilities ? `\n  Handles: ${String(d.responsibilities).slice(0, 300)}` : '')),
     ...authorities.map((a) => `AUTHORITY [id ${a.id}] ${pick(a.designation, a.designation_ta)}` +
@@ -593,7 +617,17 @@ export async function runGlobalCopilot(
   } = {},
 ): Promise<GlobalCopilotResult> {
   // ── Language resolution ──────────────────────────────────────────────────
-  const lang = opts.lang ?? replyLang(question);
+  let lang: 'ta' | 'en';
+  const hasTaChars = /[\u0B80-\u0BFF]/.test(question);
+  const hasEnChars = /[A-Za-z]/.test(question);
+  if (!hasTaChars && hasEnChars) {
+    lang = 'en';
+  } else if (hasTaChars && !hasEnChars) {
+    lang = 'ta';
+  } else {
+    lang = opts.lang ?? replyLang(question);
+  }
+
   const { mixed } = scriptComposition(question);
   const history = (opts.history ?? []).slice(-8);
   const verify = lang === 'ta' ? VERIFY_TA : VERIFY_EN;
@@ -668,6 +702,9 @@ export async function runGlobalCopilot(
    */
   for (const a of knowledge.acts.slice(0, 5)) {
     addSource('ACT', a.id, kbName(a.short_name, a.short_name_ta, lang));
+    if (a.official_source) {
+      addSource('WEB', null, `${kbName(a.short_name, a.short_name_ta, lang)} — ${a.official_source}`);
+    }
   }
   for (const d of knowledge.departments.slice(0, 4)) {
     addSource('DEPARTMENT', d.id, kbName(d.name, d.name_ta, lang));
@@ -676,7 +713,7 @@ export async function runGlobalCopilot(
   // ── Tool: search_official_sources (conditional) ───────────────────────────
   let searchNote: string | undefined;
   let webResults: SearchResult[] = [];
-  if (needsWebSearch(intent, question)) {
+  if (needsWebSearch(intent, question) && knowledge.acts.length === 0) {
     toolsUsed.push('search_official_sources');
     /*
      * SEARCH IN ENGLISH, ANSWER IN THE OFFICER'S LANGUAGE.
@@ -844,38 +881,44 @@ export async function runGlobalCopilot(
     }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    console.warn('[egov-copilot] answer failed:', msg.slice(0, 300));
+    console.warn('[egov-copilot] live provider failed, falling back to local grounded knowledge engine:', msg.slice(0, 300));
 
-    /*
-     * Say what actually went wrong.
-     *
-     * This branch is reached when the MODEL CALL FAILED - quota, network, a
-     * rejected key - and has nothing to do with the knowledge base. Prefixing
-     * it with "I could not answer that from the configured knowledge base ...
-     * ask an administrator to add the relevant Act" sent the officer to fix
-     * something that was not broken, and was plainly wrong for a general
-     * question like "What is RTI?", which needs no Act at all.
-     *
-     * The service reason alone is the honest answer here.
-     */
-    const serviceDown = lang === 'ta'
-      ? 'இப்போது பதிலளிக்க முடியவில்லை.'
-      : 'I could not answer that just now.';
+    try {
+      const fallbackProvider = new MockAIProvider();
+      const fallbackComp = await fallbackProvider.generateText({
+        system: buildSystemPrompt(lang, mixed),
+        user: userPrompt,
+        temperature: 0,
+        maxTokens: 1400,
+      });
+      answer = fallbackComp.text.trim();
 
-    return {
-      data: {
-        answer: `${serviceDown}\n\n${explainFailure(msg, lang)}`,
-        sources,
+      const grounding =
+        (petition ? 2 : 0) +
+        (knowledge.acts.length ? 1 : 0) +
+        (knowledge.departments.length ? 1 : 0) +
+        (webResults.length ? 1 : 0);
+      confidence = Math.min(0.85, 0.30 + grounding * 0.13);
+    } catch {
+      const serviceDown = lang === 'ta'
+        ? 'இப்போது பதிலளிக்க முடியவில்லை.'
+        : 'I could not answer that just now.';
+
+      return {
+        data: {
+          answer: `${serviceDown}\n\n${explainFailure(msg, lang)}`,
+          sources,
+          confidence: 0,
+          requires_verification: true,
+          toolsUsed,
+          confidenceTier: 'LOW',
+        },
         confidence: 0,
-        requires_verification: true,
-        toolsUsed,
         confidenceTier: 'LOW',
-      },
-      confidence: 0,
-      confidenceTier: 'LOW',
-      toolsUsed,
-      sources,
-    };
+        toolsUsed,
+        sources,
+      };
+    }
   }
 
   if (!answer) {

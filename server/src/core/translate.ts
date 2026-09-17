@@ -136,8 +136,12 @@ export async function translateText(
     let out;
     try {
       out = await getProvider().translate(src, target);
-    } catch {
-      await new Promise((r) => setTimeout(r, 1200));
+    } catch (err: any) {
+      const errStr = String(err?.message || err);
+      if (errStr.includes('429') || errStr.includes('quota') || errStr.includes('401') || errStr.includes('403')) {
+        throw err;
+      }
+      await new Promise((r) => setTimeout(r, 600));
       out = await getProvider().translate(src, target);
     }
     const translated = String(out.text ?? '').trim();

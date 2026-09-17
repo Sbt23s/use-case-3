@@ -1,60 +1,29 @@
 /**
- * Tamil to Latin transliteration.
- *
- * Renders a Tamil name or place in Latin letters for the English view, using
- * the spellings Tamil Nadu government correspondence actually uses - "Coimbatore",
- * not the strict-ISO "Kōyamputtūr" - because an officer has to recognise the
- * place, and a citizen has to find it on their other documents.
- *
- * WHAT THIS IS AND IS NOT
- *
- * It is a RENDERING AID, not a translation, and the UI labels it as such. The
- * Tamil remains the record: this is what a reader sees when the console is in
- * English, so that a case file is legible to an officer who does not read Tamil.
- *
- * It cannot be authoritative. Tamil has no single accepted Latin spelling, and
- * the form on a citizen's Aadhaar or ration card may differ from anything a
- * rule can derive. That is why the original is always kept and shown, and why
- * the transliteration is never written back into the record.
- *
- * HOW IT WORKS. Tamil is an abugida: a consonant carries an inherent "a" unless
- * a vowel sign replaces it or a pulli (virama) removes it. So the text is walked
- * cluster by cluster - consonant, then any vowel sign or pulli that follows -
- * rather than character by character, which would produce "ka-aa" for "கா".
+ * Dual English <-> Tamil transliteration & name/place translation dictionary.
+ * Runs 100% in-memory without any external API calls or latency (0ms).
  */
 
-/** Independent vowels, which stand alone at the start of a word. */
 const VOWELS: Record<string, string> = {
   'அ': 'a', 'ஆ': 'aa', 'இ': 'i', 'ஈ': 'ee', 'உ': 'u', 'ஊ': 'oo',
   'எ': 'e', 'ஏ': 'ae', 'ஐ': 'ai', 'ஒ': 'o', 'ஓ': 'oa', 'ஔ': 'au',
 };
 
-/** Consonants, given with their inherent vowel stripped. */
 const CONSONANTS: Record<string, string> = {
   'க': 'k', 'ங': 'ng', 'ச': 'ch', 'ஞ': 'nj', 'ட': 't', 'ண': 'n',
   'த': 'th', 'ந': 'n', 'ப': 'p', 'ம': 'm', 'ய': 'y', 'ர': 'r',
   'ல': 'l', 'வ': 'v', 'ழ': 'zh', 'ள': 'l', 'ற': 'r', 'ன': 'n',
-  // Grantha letters, used for loan words.
   'ஜ': 'j', 'ஷ': 'sh', 'ஸ': 's', 'ஹ': 'h', 'க்ஷ': 'ksh', 'ஸ்ரீ': 'sri',
 };
 
-/** Dependent vowel signs, which replace a consonant's inherent vowel. */
 const SIGNS: Record<string, string> = {
   'ா': 'a', 'ி': 'i', 'ீ': 'ee', 'ு': 'u', 'ூ': 'oo',
   'ெ': 'e', 'ே': 'e', 'ை': 'ai', 'ொ': 'o', 'ோ': 'o', 'ௌ': 'au',
 };
 
-const PULLI = '்';          // virama: removes the inherent vowel
+const PULLI = '்';
 const AYTHAM = 'ஃ';
 
-/**
- * Place and word spellings in common official use.
- *
- * Checked before the rules, because these are the forms that appear on
- * government correspondence and on citizens' documents. A rule-derived
- * "Koayamputhoor" would be technically defensible and practically useless.
- */
-const KNOWN: Record<string, string> = {
+const KNOWN_TA_TO_EN: Record<string, string> = {
   'கோயம்புத்தூர்': 'Coimbatore',
   'சென்னை': 'Chennai',
   'மதுரை': 'Madurai',
@@ -114,87 +83,6 @@ const KNOWN: Record<string, string> = {
   'எண்': 'No',
 };
 
-/** Transliterate one Tamil word. */
-function word(w: string): string {
-  const exact = KNOWN[w];
-  if (exact) return exact;
-
-  const chars = [...w];
-  let out = '';
-
-  for (let i = 0; i < chars.length; i++) {
-    const c = chars[i];
-
-    if (VOWELS[c]) { out += VOWELS[c]; continue; }
-    if (c === AYTHAM) { out += 'h'; continue; }
-
-    const cons = CONSONANTS[c];
-    if (!cons) {
-      // Not Tamil (a digit, punctuation, Latin): pass it through untouched.
-      out += c;
-      continue;
-    }
-
-    const next = chars[i + 1];
-
-    if (next === PULLI) {
-      // Pulli removes the inherent vowel: a bare consonant.
-      out += cons;
-      i++;
-    } else if (next && SIGNS[next]) {
-      out += cons + SIGNS[next];
-      i++;
-    } else {
-      // No sign: the inherent "a" sounds.
-      out += `${cons}a`;
-    }
-  }
-
-  // Tidy the doubled vowels a naive pass produces ("aa" inside a word is fine,
-  // but "aaa" is not), and capitalise as a name or place would be written.
-  const cleaned = out.replace(/([aeiou])\1{2,}/g, '$1$1');
-  return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
-}
-
-const TAMIL = /[஀-௿]/;
-const LATIN = /[a-zA-Z]/;
-
-/** True when the text contains any Tamil script. */
-export function hasTamil(s: unknown): boolean {
-  return TAMIL.test(String(s ?? ''));
-}
-
-/** True when the text contains any Latin letters. */
-export function hasLatin(s: unknown): boolean {
-  return LATIN.test(String(s ?? ''));
-}
-
-/**
- * Transliterate Tamil within a string, leaving everything else alone.
- *
- * Numbers, Latin words and punctuation pass through unchanged, so
- * "வழுக்குப்பாறை, நெ. 1108" keeps its number and its comma.
- */
-export function transliterate(input: unknown): string {
-  const s = String(input ?? '');
-  if (!TAMIL.test(s)) return s;
-
-  return s
-    .split(/(\s+)/)                       // keep the spacing
-    .map((token) => {
-      if (!TAMIL.test(token)) return token;
-      // Split off leading/trailing punctuation so KNOWN lookups still match.
-      const m = token.match(/^([^஀-௿]*)([\s\S]*?)([^஀-௿]*)$/);
-      if (!m) return word(token);
-      const [, before, core, after] = m;
-      return before + (core ? word(core) : '') + after;
-    })
-    .join('');
-}
-
-/**
- * English to Tamil dictionary for common official terms, names, and places.
- */
 export const KNOWN_EN_TO_TA: Record<string, string> = {
   // Official & petition placeholders
   'test petitioner': 'தேர்வு மனுதாரர்',
@@ -373,19 +261,16 @@ export const KNOWN_EN_TO_TA: Record<string, string> = {
   'vijayan': 'விஜயன்',
 };
 
-// Initial vowels in Tamil
 const TA_INIT_VOWEL: Record<string, string> = {
   'aa': 'ஆ', 'ai': 'ஐ', 'au': 'ஔ', 'ee': 'ஈ', 'oo': 'ஊ',
   'a': 'அ', 'i': 'இ', 'u': 'உ', 'e': 'எ', 'o': 'ஒ',
 };
 
-// Dependent vowel signs
 const TA_VOWEL_SIGN: Record<string, string> = {
   'aa': 'ா', 'ai': 'ை', 'au': 'ௌ', 'ee': 'ீ', 'oo': 'ூ',
   'a': '', 'i': 'ி', 'u': 'ு', 'e': 'ெ', 'o': 'ொ',
 };
 
-// Consonant mapping
 const TA_CONSONANTS: Record<string, string> = {
   'sh': 'ஷ', 'th': 'த', 'dh': 'த', 'ch': 'ச', 'zh': 'ழ', 'ng': 'ங',
   'nj': 'ஞ', 'ph': 'ப', 'kh': 'க', 'gh': 'க', 'bh': 'ப',
@@ -394,7 +279,17 @@ const TA_CONSONANTS: Record<string, string> = {
   'l': 'ல', 'v': 'வ', 'w': 'வ', 'h': 'ஹ', 'n': 'ன',
 };
 
-/** Phonetic transliteration from English Latin letters to Tamil script. */
+const TAMIL_REGEX = /[஀-௿]/;
+const LATIN_REGEX = /[a-zA-Z]/;
+
+export function hasTamil(s: unknown): boolean {
+  return TAMIL_REGEX.test(String(s ?? ''));
+}
+
+export function hasLatin(s: unknown): boolean {
+  return LATIN_REGEX.test(String(s ?? ''));
+}
+
 function latinWordToTamil(raw: string): string {
   const lower = raw.toLowerCase().trim();
   if (!lower) return raw;
@@ -405,7 +300,6 @@ function latinWordToTamil(raw: string): string {
   let isStart = true;
 
   while (i < lower.length) {
-    // Check 2-letter vowel digraph
     const v2 = lower.slice(i, i + 2);
     if (isStart && TA_INIT_VOWEL[v2]) {
       out += TA_INIT_VOWEL[v2];
@@ -413,7 +307,6 @@ function latinWordToTamil(raw: string): string {
       isStart = false;
       continue;
     }
-    // Check 1-letter vowel at start
     const v1 = lower[i];
     if (isStart && TA_INIT_VOWEL[v1]) {
       out += TA_INIT_VOWEL[v1];
@@ -422,7 +315,6 @@ function latinWordToTamil(raw: string): string {
       continue;
     }
 
-    // Check consonant digraphs
     const c2 = lower.slice(i, i + 2);
     let cons = TA_CONSONANTS[c2];
     let consLen = 2;
@@ -434,10 +326,8 @@ function latinWordToTamil(raw: string): string {
     if (cons) {
       i += consLen;
       isStart = false;
-      // Special: word-initial 'n' uses 'ந'
       if (cons === 'ன' && out.length === 0) cons = 'ந';
 
-      // Look ahead for vowel following consonant
       const nextV2 = lower.slice(i, i + 2);
       if (TA_VOWEL_SIGN[nextV2] !== undefined) {
         out += cons + TA_VOWEL_SIGN[nextV2];
@@ -446,11 +336,9 @@ function latinWordToTamil(raw: string): string {
         out += cons + TA_VOWEL_SIGN[lower[i]];
         i++;
       } else {
-        // No vowel follows: bare consonant with virama (pulli)
         out += cons + PULLI;
       }
     } else {
-      // Punctuation, digits or unrecognised character: pass through
       out += lower[i];
       i++;
       isStart = false;
@@ -460,18 +348,11 @@ function latinWordToTamil(raw: string): string {
   return out;
 }
 
-/**
- * Transliterate/translate English text into Tamil.
- *
- * Checks dictionary for known names and official terms (like "Test Petitioner" -> "தேர்வு மனுதாரர்"),
- * then uses phonetic syllabic transliteration for other words.
- */
 export function transliterateToTamil(input: unknown): string {
   const s = String(input ?? '').trim();
   if (!s) return '';
   if (hasTamil(s) && !hasLatin(s)) return s;
 
-  // Check whole phrase dictionary match (e.g. "Test Petitioner")
   const phraseKey = s.toLowerCase();
   if (KNOWN_EN_TO_TA[phraseKey]) return KNOWN_EN_TO_TA[phraseKey];
 
@@ -487,34 +368,67 @@ export function transliterateToTamil(input: unknown): string {
     .join('');
 }
 
-/**
- * Cleanly display a citizen's name in the selected console language.
- *
- * When lang is 'ta':
- * - If already in Tamil, returns as-is.
- * - If in English, transliterates/translates to Tamil.
- *
- * When lang is 'en':
- * - If in Tamil, transliterates to Latin English.
- * - If in English, returns as-is.
- */
+function wordToLatin(w: string): string {
+  const exact = KNOWN_TA_TO_EN[w];
+  if (exact) return exact;
+
+  const chars = [...w];
+  let out = '';
+
+  for (let i = 0; i < chars.length; i++) {
+    const c = chars[i];
+    if (VOWELS[c]) { out += VOWELS[c]; continue; }
+    if (c === AYTHAM) { out += 'h'; continue; }
+
+    const cons = CONSONANTS[c];
+    if (!cons) { out += c; continue; }
+
+    const next = chars[i + 1];
+    if (next === PULLI) {
+      out += cons;
+      i++;
+    } else if (next && SIGNS[next]) {
+      out += cons + SIGNS[next];
+      i++;
+    } else {
+      out += `${cons}a`;
+    }
+  }
+
+  const cleaned = out.replace(/([aeiou])\1{2,}/g, '$1$1');
+  return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+}
+
+export function transliterateToLatin(input: unknown): string {
+  const s = String(input ?? '');
+  if (!TAMIL_REGEX.test(s)) return s;
+
+  return s
+    .split(/(\s+)/)
+    .map((token) => {
+      if (!TAMIL_REGEX.test(token)) return token;
+      const m = token.match(/^([^஀-௿]*)([\s\S]*?)([^஀-௿]*)$/);
+      if (!m) return wordToLatin(token);
+      const [, before, core, after] = m;
+      return before + (core ? wordToLatin(core) : '') + after;
+    })
+    .join('');
+}
+
 export function displayName(name: unknown, lang: 'en' | 'ta'): string {
   const s = String(name ?? '').trim();
   if (!s) return '';
   if (lang === 'ta') {
     return hasTamil(s) ? s : transliterateToTamil(s);
   }
-  return hasTamil(s) ? transliterate(s) : s;
+  return hasTamil(s) ? transliterateToLatin(s) : s;
 }
 
-/**
- * Cleanly display an address in the selected console language.
- */
 export function displayAddress(address: unknown, lang: 'en' | 'ta'): string {
   const s = String(address ?? '').trim();
   if (!s) return '';
   if (lang === 'ta') {
     return hasTamil(s) ? s : transliterateToTamil(s);
   }
-  return hasTamil(s) ? transliterate(s) : s;
+  return hasTamil(s) ? transliterateToLatin(s) : s;
 }
