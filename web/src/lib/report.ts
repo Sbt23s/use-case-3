@@ -279,20 +279,20 @@ export async function buildAnalysisReport(input: ReportInput): Promise<jsPDF> {
   // Header for Page 1
   const emblemMarkup = emblem
     ? `<img src="${emblem}" style="width: 44px; height: 44px; object-fit: contain; margin-bottom: 6px;" alt="Emblem" />`
-    : `<div style="width: 42px; height: 42px; border: 2px solid #135830; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 11px; color: #135830; margin: 0 auto 6px auto; letter-spacing: 0.5px;">GOVT</div>`;
+    : `<div style="width: 42px; height: 42px; border: 2px solid #1e293b; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 11px; color: #1e293b; margin: 0 auto 6px auto; letter-spacing: 0.5px;">GOVT</div>`;
 
   const page1Header = `
     <div style="text-align: center; margin-bottom: 12px;">
       <div style="display: flex; justify-content: center;">${emblemMarkup}</div>
-      <div style="font-size: 17px; font-weight: 700; color: #135830; letter-spacing: 0.5px; line-height: 1.3;">${escapeHtml(l('govt'))}</div>
+      <div style="font-size: 17px; font-weight: 700; color: #0f172a; letter-spacing: 0.5px; line-height: 1.3;">${escapeHtml(l('govt'))}</div>
       <div style="font-size: 12.5px; font-weight: 600; color: #2d3748; margin-top: 2px;">${escapeHtml(l('portal'))}</div>
       <div style="font-size: 10.5px; color: #64748b; margin-top: 1px;">${escapeHtml(l('portalSub'))}</div>
-      <div style="margin-top: 10px; border-bottom: 2px solid #135830; height: 0;"></div>
-      <div style="margin-top: 2px; border-bottom: 0.8px solid #135830; height: 0;"></div>
+      <div style="margin-top: 10px; border-bottom: 2px solid #334155; height: 0;"></div>
+      <div style="margin-top: 2px; border-bottom: 0.8px solid #94a3b8; height: 0;"></div>
     </div>
 
     <div style="text-align: center; margin: 10px 0 12px 0;">
-      <span style="font-size: 14px; font-weight: 700; color: #0f172a; letter-spacing: 0.5px; background: #eef7f2; padding: 4px 18px; border-radius: 4px; border: 1px solid #cbe5d5;">
+      <span style="font-size: 14px; font-weight: 700; color: #0f172a; letter-spacing: 0.5px; background: #f1f5f9; padding: 4px 18px; border-radius: 4px; border: 1px solid #e2e8f0;">
         ${escapeHtml(l('title'))}
       </span>
     </div>
@@ -310,14 +310,14 @@ export async function buildAnalysisReport(input: ReportInput): Promise<jsPDF> {
       <div>
         <div style="color: #64748b; font-size: 10px; text-transform: uppercase;">${escapeHtml(l('verifStatus'))}</div>
         <div>
-          <span style="background: #e6f4ea; color: #137333; font-weight: 600; padding: 2px 7px; border-radius: 3px; font-size: 10.5px; display: inline-block;">
+          <span style="background: #f1f5f9; color: #1e293b; font-weight: 600; padding: 2px 7px; border-radius: 3px; font-size: 10.5px; display: inline-block; border: 1px solid #cbd5e1;">
             ${escapeHtml(input.status ? t(input.status) : (a?.overall_confidence >= 0.7 ? l('VERIFIED') : l('UNVERIFIED')))}
           </span>
         </div>
       </div>
       <div>
         <div style="color: #64748b; font-size: 10px; text-transform: uppercase;">${escapeHtml(l('confidence'))}</div>
-        <div style="font-weight: 700; color: #135830; font-size: 12px;">
+        <div style="font-weight: 700; color: #0f172a; font-size: 12px;">
           ${a?.overall_confidence != null ? Math.round(a.overall_confidence * 100) + '%' : '—'}
         </div>
       </div>
@@ -326,7 +326,7 @@ export async function buildAnalysisReport(input: ReportInput): Promise<jsPDF> {
 
   // Running Header for Page 2+
   const runningHeader = `
-    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1.5px solid #135830; padding-bottom: 6px; margin-bottom: 14px; font-size: 11px; color: #135830;">
+    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1.5px solid #cbd5e1; padding-bottom: 6px; margin-bottom: 14px; font-size: 11px; color: #334155;">
       <span style="font-weight: 700;">${escapeHtml(l('govt'))} — ${escapeHtml(l('portal'))}</span>
       <span style="font-family: monospace; font-weight: 600; color: #475569;">${escapeHtml(l('reference'))}: ${escapeHtml(input.referenceNo)}</span>
     </div>
@@ -352,7 +352,7 @@ export async function buildAnalysisReport(input: ReportInput): Promise<jsPDF> {
   const page1Content = `
     <!-- Section: Particulars -->
     <div style="margin-bottom: 14px;">
-      <div style="background: #f2f9f4; border-left: 4px solid #135830; padding: 5px 10px; font-weight: 700; font-size: 12px; color: #135830; text-transform: uppercase; margin-bottom: 8px;">
+      <div style="background: #f8fafc; border-left: 4px solid #475569; padding: 5px 10px; font-weight: 700; font-size: 12px; color: #1e293b; text-transform: uppercase; margin-bottom: 8px;">
         ${escapeHtml(l('particulars'))}
       </div>
       <table style="width: 100%; border-collapse: collapse; font-size: 11.5px;">
@@ -413,7 +413,7 @@ export async function buildAnalysisReport(input: ReportInput): Promise<jsPDF> {
 
     <!-- Section: Matter / Issue Details -->
     <div style="margin-bottom: 10px;">
-      <div style="background: #f2f9f4; border-left: 4px solid #135830; padding: 5px 10px; font-weight: 700; font-size: 12px; color: #135830; text-transform: uppercase; margin-bottom: 8px;">
+      <div style="background: #f8fafc; border-left: 4px solid #475569; padding: 5px 10px; font-weight: 700; font-size: 12px; color: #1e293b; text-transform: uppercase; margin-bottom: 8px;">
         ${escapeHtml(l('matter'))}
       </div>
       <table style="width: 100%; border-collapse: collapse; font-size: 11.5px;">
@@ -451,7 +451,7 @@ export async function buildAnalysisReport(input: ReportInput): Promise<jsPDF> {
   const page2Content = `
     <!-- Section: Government Classification -->
     <div style="margin-bottom: 14px;">
-      <div style="background: #f2f9f4; border-left: 4px solid #135830; padding: 5px 10px; font-weight: 700; font-size: 12px; color: #135830; text-transform: uppercase; margin-bottom: 8px;">
+      <div style="background: #f8fafc; border-left: 4px solid #475569; padding: 5px 10px; font-weight: 700; font-size: 12px; color: #1e293b; text-transform: uppercase; margin-bottom: 8px;">
         ${escapeHtml(l('classify'))}
       </div>
       <table style="width: 100%; border-collapse: collapse; font-size: 11.5px;">
@@ -463,7 +463,7 @@ export async function buildAnalysisReport(input: ReportInput): Promise<jsPDF> {
           <tr style="border-bottom: 1px solid #f1f5f9;">
             <td style="padding: 5px 6px; font-weight: 600; color: #475569;">${escapeHtml(l('verifStatus'))}</td>
             <td style="padding: 5px 6px;">
-              <span style="background: #e6f4ea; color: #137333; font-weight: 600; padding: 2px 7px; border-radius: 3px; font-size: 10.5px;">
+              <span style="background: #f1f5f9; color: #1e293b; font-weight: 600; padding: 2px 7px; border-radius: 3px; font-size: 10.5px; border: 1px solid #cbd5e1;">
                 ${escapeHtml(actVerif)}
               </span>
             </td>
@@ -474,7 +474,7 @@ export async function buildAnalysisReport(input: ReportInput): Promise<jsPDF> {
           </tr>
           <tr style="border-bottom: 1px solid #f1f5f9;">
             <td style="padding: 5px 6px; font-weight: 600; color: #475569;">${escapeHtml(l('department'))}</td>
-            <td style="padding: 5px 6px; font-weight: 700; color: #135830;">${escapeHtml(deptName)}</td>
+            <td style="padding: 5px 6px; font-weight: 700; color: #0f172a;">${escapeHtml(deptName)}</td>
           </tr>
           <tr style="border-bottom: 1px solid #f1f5f9;">
             <td style="padding: 5px 6px; font-weight: 600; color: #475569;">${escapeHtml(l('authority'))}</td>
@@ -513,13 +513,13 @@ export async function buildAnalysisReport(input: ReportInput): Promise<jsPDF> {
     <!-- Section: Workflow -->
     ${wfList.length > 0 ? `
     <div style="margin-bottom: 14px;">
-      <div style="background: #f2f9f4; border-left: 4px solid #135830; padding: 5px 10px; font-weight: 700; font-size: 12px; color: #135830; text-transform: uppercase; margin-bottom: 8px;">
+      <div style="background: #f8fafc; border-left: 4px solid #475569; padding: 5px 10px; font-weight: 700; font-size: 12px; color: #1e293b; text-transform: uppercase; margin-bottom: 8px;">
         ${escapeHtml(l('workflow'))}
       </div>
       <div style="font-size: 11.5px; line-height: 1.5;">
         ${wfList.map((step: any, idx: number) => `
           <div style="display: flex; gap: 8px; margin-bottom: 5px; align-items: flex-start;">
-            <span style="background: #135830; color: #ffffff; width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; flex-shrink: 0; margin-top: 1px;">
+            <span style="background: #334155; color: #ffffff; width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; flex-shrink: 0; margin-top: 1px;">
               ${idx + 1}
             </span>
             <span style="color: #1e293b;">${escapeHtml(t(step))}</span>
@@ -531,7 +531,7 @@ export async function buildAnalysisReport(input: ReportInput): Promise<jsPDF> {
     <!-- Section: Required Documents -->
     ${reqDocsList.length > 0 ? `
     <div style="margin-bottom: 14px;">
-      <div style="background: #f2f9f4; border-left: 4px solid #135830; padding: 5px 10px; font-weight: 700; font-size: 12px; color: #135830; text-transform: uppercase; margin-bottom: 6px;">
+      <div style="background: #f8fafc; border-left: 4px solid #475569; padding: 5px 10px; font-weight: 700; font-size: 12px; color: #1e293b; text-transform: uppercase; margin-bottom: 6px;">
         ${escapeHtml(l('reqDocs'))}
       </div>
       <div style="font-size: 11px; line-height: 1.4; color: #334155; padding-left: 6px;">
@@ -575,7 +575,7 @@ export async function buildAnalysisReport(input: ReportInput): Promise<jsPDF> {
       if (imgDataUrl) {
         annexurePagesHtml.push(`
           <div style="margin-bottom: 12px;">
-            <div style="background: #f2f9f4; border-left: 4px solid #135830; padding: 6px 12px; font-weight: 700; font-size: 12.5px; color: #135830; text-transform: uppercase; margin-bottom: 10px;">
+            <div style="background: #f8fafc; border-left: 4px solid #475569; padding: 6px 12px; font-weight: 700; font-size: 12.5px; color: #1e293b; text-transform: uppercase; margin-bottom: 10px;">
               ${escapeHtml(l('annexure'))}
             </div>
             <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: #64748b; margin-bottom: 12px; padding: 6px 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px;">
@@ -599,12 +599,12 @@ export async function buildAnalysisReport(input: ReportInput): Promise<jsPDF> {
 
       annexurePagesHtml.push(`
         <div style="margin-bottom: 12px;">
-          <div style="background: #f2f9f4; border-left: 4px solid #135830; padding: 6px 12px; font-weight: 700; font-size: 12.5px; color: #135830; text-transform: uppercase; margin-bottom: 10px;">
+          <div style="background: #f8fafc; border-left: 4px solid #475569; padding: 6px 12px; font-weight: 700; font-size: 12.5px; color: #1e293b; text-transform: uppercase; margin-bottom: 10px;">
             ${escapeHtml(l('annexure'))} — ${escapeHtml(typeLabel)}
           </div>
           <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: #64748b; margin-bottom: 12px; padding: 6px 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px;">
             <span><strong>${escapeHtml(l('docRef'))}:</strong> ${escapeHtml(fname)}</span>
-            <span>${att.document?.ocr_status ? `<span style="background: #e6f4ea; color: #137333; font-weight: 600; padding: 2px 7px; border-radius: 3px;">${escapeHtml(t(att.document.ocr_status))}</span>` : ''}</span>
+            <span>${att.document?.ocr_status ? `<span style="background: #f1f5f9; color: #1e293b; font-weight: 600; padding: 2px 7px; border-radius: 3px; border: 1px solid #cbd5e1;">${escapeHtml(t(att.document.ocr_status))}</span>` : ''}</span>
           </div>
           <div style="font-size: 11px; font-weight: 600; color: #475569; margin-bottom: 6px;">
             ${escapeHtml(l('textRead'))}:
@@ -741,18 +741,18 @@ export async function buildConversationReport(input: ConversationReportInput): P
 
   const emblemMarkup = emblem
     ? `<img src="${emblem}" style="width: 40px; height: 40px; object-fit: contain; margin-bottom: 6px;" alt="Emblem" />`
-    : `<div style="width: 38px; height: 38px; border: 2px solid #135830; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 10px; color: #135830; margin: 0 auto 6px auto;">GOVT</div>`;
+    : `<div style="width: 38px; height: 38px; border: 2px solid #334155; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 10px; color: #334155; margin: 0 auto 6px auto;">GOVT</div>`;
 
   const headerHtml = `
     <div style="text-align: center; margin-bottom: 12px;">
       <div style="display: flex; justify-content: center;">${emblemMarkup}</div>
-      <div style="font-size: 16px; font-weight: 700; color: #135830;">${escapeHtml(l('govt'))}</div>
+      <div style="font-size: 16px; font-weight: 700; color: #0f172a;">${escapeHtml(l('govt'))}</div>
       <div style="font-size: 12px; font-weight: 600; color: #2d3748;">${escapeHtml(l('portal'))}</div>
-      <div style="margin-top: 8px; border-bottom: 2px solid #135830; height: 0;"></div>
-      <div style="margin-top: 2px; border-bottom: 0.8px solid #135830; height: 0;"></div>
+      <div style="margin-top: 8px; border-bottom: 2px solid #334155; height: 0;"></div>
+      <div style="margin-top: 2px; border-bottom: 0.8px solid #94a3b8; height: 0;"></div>
     </div>
     <div style="text-align: center; margin: 8px 0 12px 0;">
-      <span style="font-size: 13px; font-weight: 700; color: #0f172a; background: #eef7f2; padding: 4px 16px; border-radius: 4px; border: 1px solid #cbe5d5;">
+      <span style="font-size: 13px; font-weight: 700; color: #0f172a; background: #f1f5f9; padding: 4px 16px; border-radius: 4px; border: 1px solid #e2e8f0;">
         ${escapeHtml(t(input.title) || l('convTitle'))}
       </span>
       <div style="font-size: 10.5px; color: #64748b; margin-top: 6px;">
@@ -771,9 +771,9 @@ export async function buildConversationReport(input: ConversationReportInput): P
   const messagesHtml = input.messages.map((m) => {
     const isUser = m.role === 'USER';
     const roleTitle = isUser ? l('officer') : l('copilot');
-    const bg = isUser ? '#f1f5f9' : '#f0fdf4';
-    const borderColor = isUser ? '#cbd5e1' : '#bbf7d0';
-    const accentColor = isUser ? '#475569' : '#135830';
+    const bg = isUser ? '#f1f5f9' : '#f8fafc';
+    const borderColor = isUser ? '#cbd5e1' : '#e2e8f0';
+    const accentColor = isUser ? '#475569' : '#334155';
 
     return `
       <div style="margin-bottom: 12px; background: ${bg}; border: 1px solid ${borderColor}; border-left: 4px solid ${accentColor}; border-radius: 6px; padding: 10px 14px; font-size: 11.5px; line-height: 1.55;">

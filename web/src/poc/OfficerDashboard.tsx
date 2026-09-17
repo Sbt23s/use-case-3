@@ -11,8 +11,10 @@ import { displayName } from '../lib/translit';
  *   2. Upload a petition on behalf of a citizen — the system OCRs the
  *      document and runs AI analysis automatically, no extra clicks.
  */
-export function OfficerDashboard({ feed, live, onOpen }: {
+export function OfficerDashboard({ feed, live, onOpen, searchQ = '', onClearSearch }: {
   feed: any[]; live: boolean; onOpen: (id: number) => void;
+  searchQ?: string;
+  onClearSearch?: () => void;
 }) {
   const { t, lang } = useI18n();
 
@@ -22,38 +24,54 @@ export function OfficerDashboard({ feed, live, onOpen }: {
 
   const [rows, setRows] = useState<any[]>([]);
   const [stats, setStats] = useState<any>(null);
-  const [q, setQ] = useState('');
+  const [q, setQ] = useState(searchQ);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(25);
+  const [pageSize, setPageSize] = useState(5);
   const [totalCount, setTotalCount] = useState(0);
   const [busy, setBusy] = useState(true);
   const [err, setErr] = useState('');
   const [fresh, setFresh] = useState<Set<number>>(new Set());
   const [showUpload, setShowUpload] = useState(false);
 
-  const load = useCallback(async (search?: string, targetPage = page, targetPageSize = pageSize) => {
+  const reqIdRef = useRef(0);
+
+  const load = useCallback(async (search = q, targetPage = page, targetPageSize = pageSize) => {
+    const curReq = ++reqIdRef.current;
+    setBusy(true);
     try {
       const [list, s] = await Promise.all([
-        // `lang` asks the server to render the citizen's subject in the
-        // selected language; the original is untouched in the database.
-        // Server-side pagination loads only the requested page (e.g. 25 items)
-        // keeping network payload small and response times under 20ms.
         pocApi.get<{ rows: any[]; total: number }>(
           `/cp/petitions?lang=${lang}&page=${targetPage}&limit=${targetPageSize}${search ? `&q=${encodeURIComponent(search)}` : ''}`,
         ),
         pocApi.get<any>('/cp/stats'),
       ]);
-      setRows(list.rows);
-      setTotalCount(list.total ?? list.rows.length);
-      setStats(s);
-      setErr('');
-    } catch (e: any) { setErr(e.message); }
-    finally { setBusy(false); }
-  }, [lang, page, pageSize]);
+      if (curReq === reqIdRef.current) {
+        setRows(list.rows);
+        setTotalCount(list.total ?? list.rows.length);
+        setStats(s);
+        setErr('');
+      }
+    } catch (e: any) {
+      if (curReq === reqIdRef.current) {
+        setErr(e.message);
+      }
+    } finally {
+      if (curReq === reqIdRef.current) {
+        setBusy(false);
+      }
+    }
+  }, [lang, q, page, pageSize]);
+
+  // Sync with real-time search from navbar
+  useEffect(() => {
+    setQ(searchQ);
+    setPage(1);
+    load(searchQ, 1, pageSize);
+  }, [searchQ]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Refetches when language, page, or pageSize changes
   useEffect(() => {
-    load(q || undefined, page, pageSize);
+    load(q, page, pageSize);
   }, [lang, page, pageSize]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Real-time event: refresh list with a 400ms debounce to prevent burst requests
@@ -75,6 +93,21 @@ export function OfficerDashboard({ feed, live, onOpen }: {
   const totalRows = totalCount || rows.length;
   const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
   const visibleRows = rows;
+
+  const getPageNumbers = () => {
+    const pages: number[] = [];
+    const maxButtons = 5;
+    if (totalPages <= maxButtons) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else if (page <= 3) {
+      for (let i = 1; i <= Math.min(5, totalPages); i++) pages.push(i);
+    } else if (page >= totalPages - 2) {
+      for (let i = Math.max(1, totalPages - 4); i <= totalPages; i++) pages.push(i);
+    } else {
+      for (let i = page - 2; i <= page + 2; i++) pages.push(i);
+    }
+    return pages;
+  };
 
   if (showUpload) {
     return (
@@ -114,160 +147,248 @@ export function OfficerDashboard({ feed, live, onOpen }: {
         </div>
       )}
 
-      {/* Search */}
-      <div className="poc-card">
-        <div className="body">
-          <div className="cols">
-            <div className="fld" style={{ marginBottom: 0 }}>
-              <label>{t('common.search')}</label>
-              <input
-                value={q}
-                placeholder={t('dash.searchPlaceholder')}
-                onChange={(e) => setQ(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') { setPage(1); load(q || undefined, 1, pageSize); } }}
-              />
-            </div>
-            <div style={{ flex: '0 0 auto', alignSelf: 'flex-end' }}>
-              <button className="btn primary" onClick={() => { setPage(1); load(q || undefined, 1, pageSize); }}>{t('common.search')}</button>
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* Petitions table */}
       <div className="poc-card">
         <header>
-          <h3>{t('dash.petitions')} ({rows.length})</h3>
-          {feed.length > 0 && (
-            <span className="poc-chip ok">{feed.length} {feed.length === 1 ? t('dash.liveEvent') : t('dash.liveEvents')}</span>
-          )}
+          <h3>
+            {q ? (
+              <>
+                {lang === 'ta' ? 'தேடல் முடிவுகள்' : 'Search Results'} ({totalRows})
+                <span style={{ fontSize: 13, fontWeight: 400, color: '#64748b', marginLeft: 8 }}>
+                  for "{q}"
+                </span>
+              </>
+            ) : (
+              <>{t('dash.petitions')} ({totalRows})</>
+            )}
+          </h3>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {q && onClearSearch && (
+              <button
+                type="button"
+                className="btn sm"
+                style={{ fontSize: 12, padding: '4px 10px', background: '#f1f5f9', border: '1px solid #cbd5e1', color: '#475569' }}
+                onClick={onClearSearch}
+              >
+                {lang === 'ta' ? 'தேடலை அழி' : 'Clear search'}
+              </button>
+            )}
+            {feed.length > 0 && (
+              <span className="poc-chip">{feed.length} {feed.length === 1 ? t('dash.liveEvent') : t('dash.liveEvents')}</span>
+            )}
+          </div>
         </header>
         <div className="body flush">
-          {busy ? (
-            <div className="empty"><span className="spin" /></div>
-          ) : rows.length === 0 ? (
-            <div className="empty">
-              {t('dash.noPetitions')}{' '}
-              <button className="btn sm primary" onClick={() => setShowUpload(true)}>
-                {t('dash.uploadFirst')}
-              </button>
-            </div>
-          ) : (
+          {busy && rows.length > 0 && (
+            <div className="table-loading-bar" />
+          )}
+          <div className="table-responsive">
             <table>
               <thead>
                 <tr>
-                  <th>{t('col.reference')}</th><th>{t('col.citizen')}</th><th>{t('col.subject')}</th>
-                  <th>{t('col.status')}</th><th>{t('col.suggestion')}</th><th>{t('col.docs')}</th><th>{t('col.received')}</th>
+                  <th style={{ width: '16%' }}>{t('col.reference')}</th>
+                  <th style={{ width: '18%' }}>{t('col.citizen')}</th>
+                  <th style={{ width: '28%' }}>{t('col.subject')}</th>
+                  <th style={{ width: '13%' }}>{t('col.status')}</th>
+                  <th style={{ width: '17%' }}>{t('col.suggestion')}</th>
+                  <th style={{ width: '8%', textAlign: 'center' }}>{t('col.docs')}</th>
+                  <th style={{ width: '10%' }}>{t('col.received')}</th>
                 </tr>
               </thead>
               <tbody>
-                {visibleRows.map((p) => (
-                  <tr
-                    key={p.id}
-                    className={`tap${fresh.has(p.id) ? ' fresh' : ''}`}
-                    onClick={() => onOpen(p.id)}
-                  >
-                    <td className="mono nw">
-                      {p.reference_no}
-                      {fresh.has(p.id) && <> <span className="poc-chip ok">{t('dash.newChip')}</span></>}
-                      {p.uploaded_by_officer === 1 && (
-                        <div className="small muted" style={{ fontSize: 10 }}>{t('dash.officerUpload')}</div>
-                      )}
+                {busy && rows.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} style={{ textAlign: 'center', padding: '56px 20px' }}>
+                      <div className="empty" style={{ margin: 0 }}>
+                        <span className="spin" />
+                        <div style={{ marginTop: 10, color: '#64748b', fontSize: 13 }}>
+                          {lang === 'ta' ? 'மனுக்கள் தேடப்படுகின்றன...' : 'Searching petitions...'}
+                        </div>
+                      </div>
                     </td>
-                    <td>
-                      <div className="b">{displayName(p.citizen_name_display ?? p.citizen_name, lang)}</div>
-                      <div className="small muted">{p.citizen_phone ?? '—'}</div>
-                    </td>
-                    <td style={{ maxWidth: 300 }}>
-                      {p.subject_display ?? p.subject}
-                    </td>
-                    <td>
-                      <span className={`poc-chip ${
-                        p.status === 'CLOSED' ? 'ok'
-                          : p.status === 'ANALYSING' ? 'warn'
-                          : p.analysis_status === 'COMPLETED' ? 'ok'
-                          : ''
-                      }`}>
-                        {t('status.' + p.status)}
-                      </span>
-                      {p.officer_verified === 1 && <> <span className="poc-chip ok">{t('dash.verifiedChip')}</span></>}
-                    </td>
-                    <td className="small">
-                      {p.analysis_status === 'COMPLETED' ? (
-                        <>
-                          {/*
-                            * Prefer the Tamil name when Tamil is selected, falling
-                            * back to English where the record has no Tamil name -
-                            * an officer must always see WHICH department is meant.
-                            */}
-                          <div className="b">{kb(p.suggested_department, p.suggested_department_ta)}</div>
-                          <div className="muted">
-                            {kb(p.suggested_act, p.suggested_act_ta) || t('dash.noActMatched')}
-                          </div>
-                          {p.confidence != null && (
-                            <div className={`poc-meter${p.confidence < 0.6 ? ' low' : ''}`}>
-                              <i style={{ width: `${Math.round(p.confidence * 100)}%` }} />
-                            </div>
-                          )}
-                          <div className="muted" style={{ fontSize: 11 }}>{pct(p.confidence)} {t('doc.confidence')}</div>
-                        </>
-                      ) : p.analysis_status === 'PROCESSING' ? (
-                        <span className="muted"><span className="spin" /> {t('dash.analysingText')}</span>
-                      ) : p.analysis_status === 'FAILED' ? (
-                        <span className="poc-chip err">{t('dash.analysisFailed')}</span>
-                      ) : (
-                        <span className="muted">{t('dash.pending')}</span>
-                      )}
-                    </td>
-                    <td className="mono">{p.document_count}</td>
-                    <td className="small muted nw">{fmtTime(p.created_at, lang)}</td>
                   </tr>
-                ))}
+                ) : rows.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} style={{ textAlign: 'center', padding: '52px 20px' }}>
+                      {q ? (
+                        <div className="table-search-empty">
+                          <div className="search-empty-icon">
+                            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <circle cx="11" cy="11" r="8" />
+                              <path d="M21 21l-4.35-4.35" />
+                              <path d="M8 11h6" />
+                            </svg>
+                          </div>
+                          <div className="search-empty-title">
+                            {lang === 'ta' ? `"${q}"-க்கு எந்த மனுக்களும் கிடைக்கவில்லை` : `No petitions found matching "${q}"`}
+                          </div>
+                          <div className="search-empty-desc">
+                            {lang === 'ta'
+                              ? 'மனு எண் (எ.கா. 1266), குடிமக்கள் பெயர் அல்லது தலைப்பைச் சரிபார்த்து மீண்டும் முயற்சிக்கவும்.'
+                              : 'Verify the reference number (e.g. 1266), citizen name, or try searching with different keywords.'}
+                          </div>
+                          {onClearSearch && (
+                            <button
+                              type="button"
+                              className="search-clear-btn"
+                              onClick={onClearSearch}
+                            >
+                              {lang === 'ta' ? 'தேடலை அழிக்கவும்' : 'Clear search'}
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="empty" style={{ margin: 0, padding: '24px 0' }}>
+                          {t('dash.noPetitions')}{' '}
+                          <button className="btn sm primary" onClick={() => setShowUpload(true)}>
+                            {t('dash.uploadFirst')}
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ) : (
+                  visibleRows.map((p) => (
+                    <tr
+                      key={p.id}
+                      className={`tap${fresh.has(p.id) ? ' fresh' : ''}`}
+                      onClick={() => onOpen(p.id)}
+                    >
+                      <td className="mono nw">
+                        <div style={{ fontWeight: 600, color: '#0f172a' }}>{p.reference_no}</div>
+                        {fresh.has(p.id) && <span className="poc-chip ok" style={{ marginTop: 2, fontSize: 10 }}>{t('dash.newChip')}</span>}
+                        {p.uploaded_by_officer === 1 && (
+                          <div className="muted" style={{ fontSize: 11, marginTop: 2 }}>{t('dash.officerUpload')}</div>
+                        )}
+                      </td>
+                      <td>
+                        <div className="b" style={{ fontSize: 14, color: '#0f172a' }}>{displayName(p.citizen_name_display ?? p.citizen_name, lang)}</div>
+                        <div className="muted" style={{ fontSize: 12.5, marginTop: 2 }}>{p.citizen_phone ?? '—'}</div>
+                      </td>
+                      <td style={{ maxWidth: 320, color: '#334155', fontSize: 13.5, lineHeight: 1.45 }}>
+                        {p.subject_display ?? p.subject}
+                      </td>
+                      <td>
+                        <span className={`poc-chip ${
+                          p.status === 'CLOSED' ? 'ok'
+                            : p.status === 'ANALYSING' ? 'warn'
+                            : p.analysis_status === 'COMPLETED' ? 'ok'
+                            : ''
+                        }`}>
+                          {t('status.' + p.status)}
+                        </span>
+                        {p.officer_verified === 1 && <span className="poc-chip ok" style={{ marginLeft: 4 }}>{t('dash.verifiedChip')}</span>}
+                      </td>
+                      <td className="small">
+                        {p.analysis_status === 'COMPLETED' ? (
+                          <>
+                            <div className="b" style={{ color: '#0f172a', fontSize: 13 }}>{kb(p.suggested_department, p.suggested_department_ta)}</div>
+                            <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>
+                              {kb(p.suggested_act, p.suggested_act_ta) || t('dash.noActMatched')}
+                            </div>
+                            {p.confidence != null && (
+                              <div className={`poc-meter${p.confidence < 0.6 ? ' low' : ''}`}>
+                                <i style={{ width: `${Math.round(p.confidence * 100)}%` }} />
+                              </div>
+                            )}
+                            <div className="muted" style={{ fontSize: 11 }}>{pct(p.confidence)} {t('doc.confidence')}</div>
+                          </>
+                        ) : p.analysis_status === 'PROCESSING' ? (
+                          <span className="muted"><span className="spin" /> {t('dash.analysingText')}</span>
+                        ) : p.analysis_status === 'FAILED' ? (
+                          <span className="poc-chip err">{t('dash.analysisFailed')}</span>
+                        ) : (
+                          <span className="muted">{t('dash.pending')}</span>
+                        )}
+                      </td>
+                      <td className="mono" style={{ textAlign: 'center', fontWeight: 600, color: '#0f172a' }}>
+                        {p.document_count}
+                      </td>
+                      <td className="small muted nw">{fmtTime(p.created_at, lang)}</td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
-          )}
+          </div>
 
-          {totalRows > pageSize && (
-            <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '10px 16px', borderTop: '1px solid var(--poc-border, #e5e7eb)',
-              fontSize: 13, flexWrap: 'wrap', gap: 10,
-            }}>
-              <div className="muted">
-                {lang === 'ta'
-                  ? `${((page - 1) * pageSize) + 1}–${Math.min(page * pageSize, totalRows)} / மொத்தம் ${totalRows}`
-                  : `Showing ${((page - 1) * pageSize) + 1}–${Math.min(page * pageSize, totalRows)} of ${totalRows}`}
-              </div>
-              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                <button
-                  className="btn sm"
-                  disabled={page <= 1}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                >
-                  {lang === 'ta' ? '◀ முந்தைய' : '◀ Previous'}
-                </button>
-                <span className="b" style={{ padding: '0 8px' }}>
-                  {page} / {totalPages}
-                </span>
-                <button
-                  className="btn sm"
-                  disabled={page >= totalPages}
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                >
-                  {lang === 'ta' ? 'அடுத்த ▶' : 'Next ▶'}
-                </button>
+          {/* Reference-style clean pagination */}
+          <div className="table-pagination">
+            <div className="pagination-left">
+              <span className="pagination-label">
+                {lang === 'ta' ? 'வரிசைகள் / பக்கம்' : 'Rows per page'}
+              </span>
+              <div className="pagination-select-box">
                 <select
                   value={pageSize}
-                  onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
-                  style={{ marginLeft: 8, padding: '4px 8px', borderRadius: 4, fontSize: 12, border: '1px solid #d1d5db' }}
+                  onChange={(e) => {
+                    const newSize = Number(e.target.value);
+                    setPageSize(newSize);
+                    setPage(1);
+                  }}
+                  className="pagination-select"
+                  aria-label="Rows per page"
                 >
-                  <option value={25}>25 / {lang === 'ta' ? 'பக்கம்' : 'page'}</option>
-                  <option value={50}>50 / {lang === 'ta' ? 'பக்கம்' : 'page'}</option>
-                  <option value={100}>100 / {lang === 'ta' ? 'பக்கம்' : 'page'}</option>
+                  <option value={5}>5</option>
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
                 </select>
+                <svg className="pagination-select-arrow" viewBox="0 0 10 6" width="9" height="5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M1 1l4 4 4-4" />
+                </svg>
               </div>
             </div>
-          )}
+
+            <div className="pagination-right">
+              <span className="pagination-range">
+                {totalRows === 0
+                  ? '0 - 0 of 0'
+                  : `${((page - 1) * pageSize) + 1} - ${Math.min(page * pageSize, totalRows)} of ${totalRows}`}
+              </span>
+
+              <div className="pagination-pages">
+                <button
+                  type="button"
+                  className="pagination-arrow-btn"
+                  disabled={page <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  aria-label="Previous page"
+                  title="Previous page"
+                >
+                  <svg viewBox="0 0 6 10" width="6" height="10" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M5 1L1 5l4 4" />
+                  </svg>
+                </button>
+
+                {getPageNumbers().map((pNum) => (
+                  <button
+                    key={pNum}
+                    type="button"
+                    className={`pagination-num-btn${page === pNum ? ' active' : ''}`}
+                    onClick={() => setPage(pNum)}
+                    aria-current={page === pNum ? 'page' : undefined}
+                  >
+                    {pNum}
+                  </button>
+                ))}
+
+                <button
+                  type="button"
+                  className="pagination-arrow-btn"
+                  disabled={page >= totalPages}
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  aria-label="Next page"
+                  title="Next page"
+                >
+                  <svg viewBox="0 0 6 10" width="6" height="10" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M1 1l4 4-4 4" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 

@@ -926,8 +926,10 @@ cpRouter.get('/petitions', requirePermission('PETITION_VIEW'), async (req, res) 
   where.push("IFNULL(p.origin, 'PETITION') = 'PETITION'");
   if (!isOfficer) { where.push('p.citizen_user_id = ?'); params.push(user.id); }
   if (q) {
-    where.push('(p.reference_no LIKE ? OR p.subject LIKE ? OR p.citizen_name LIKE ?)');
-    params.push(`%${q}%`, `%${q}%`, `%${q}%`);
+    const cleanQ = q.trim();
+    const noHash = cleanQ.startsWith('#') ? cleanQ.slice(1).trim() : cleanQ;
+    where.push('(p.reference_no LIKE ? OR p.subject LIKE ? OR p.citizen_name LIKE ? OR p.citizen_phone LIKE ? OR CAST(p.id AS TEXT) LIKE ?)');
+    params.push(`%${noHash}%`, `%${cleanQ}%`, `%${cleanQ}%`, `%${cleanQ}%`, `%${noHash}%`);
   }
   if (status) { where.push('p.status = ?'); params.push(status); }
 

@@ -29,7 +29,7 @@ export function PocLogin({ onLogin }: { onLogin: (token: string, user?: any) => 
   };
 
   return (
-    <div className="poc">
+    <div className="poc poc-login-page">
       <div className="poc-login">
         <div className="box">
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>

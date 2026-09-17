@@ -619,7 +619,7 @@ function PetitionerCard({ petition: p, extracted }: { petition: any; extracted: 
               {t('pet.fromDoc')}
             </span>
           )}
-          {isRenderedDifferent && rawValue && (
+          {isRenderedDifferent && rawValue && lang !== 'en' && (
             <div className="small muted" style={{ marginTop: 2 }}>
               {rawValue} <span style={{ opacity: .75 }}>· {t('pet.asWritten')}</span>
             </div>

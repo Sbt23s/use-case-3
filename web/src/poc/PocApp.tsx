@@ -26,7 +26,47 @@ export function PocApp() {
   const [openId, setOpenId] = useState<number | null>(null);
   const [live, setLive] = useState(false);
   const [feed, setFeed] = useState<any[]>([]);
+  const [searchQ, setSearchQ] = useState('');
+  const [activeSearch, setActiveSearch] = useState('');
   const esRef = useRef<EventSource | null>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      } else if (e.key === '/' && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // Real-time search debounced by 200ms
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setActiveSearch(searchQ.trim());
+      if (searchQ.trim() && openId !== null) {
+        setOpenId(null);
+      }
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [searchQ, openId]);
+
+  const handleNavSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    setOpenId(null);
+    setActiveSearch(searchQ.trim());
+  };
+
+  const handleClearSearch = useCallback(() => {
+    setSearchQ('');
+    setActiveSearch('');
+    searchInputRef.current?.focus();
+  }, []);
 
   // ---------------- session ----------------
   useEffect(() => {
@@ -67,6 +107,8 @@ export function PocApp() {
     setUser(null);
     setOpenId(null);
     setFeed([]);
+    setSearchQ('');
+    setActiveSearch('');
   }, []);
 
   if (loading) {
@@ -108,18 +150,6 @@ export function PocApp() {
         <div className="grow" />
         {/* Language toggle: switches the whole console in place, no reload. */}
         <LanguageToggle />
-        {/*
-          * Which model answers. Reachable from the console itself, not only
-          * from inside the Copilot, because it also governs the analysis that
-          * runs on upload.
-          */}
-        <button
-          className="ai-btn"
-          onClick={() => setAiSettings(true)}
-          title={t('aim.settings')}
-        >
-          ⚙ {t('aim.title')}
-        </button>
         <div className="who">
           <b>{displayName(user.fullName.replace(/,\s*(Grievance Officer|குறைதீர்ப்பு அலுவலர்)/i, '').trim(), lang)}</b>
           {t('app.role')}
@@ -128,41 +158,68 @@ export function PocApp() {
       </header>
 
       <nav className="poc-nav">
-        <button
-          className={openId === null ? 'on' : ''}
-          onClick={() => setOpenId(null)}
-        >
-          {t('nav.petitions')}
-        </button>
-        {/*
-          * e-Gov Copilot sits where AI Knowledge Configuration used to.
-          *
-          * Knowledge Configuration is hidden from the console but remains
-          * FULLY functional on the server: /api/kb/* is unchanged, and the
-          * analyser still reads every Act, Department and Authority from it.
-          * Only the navigation entry is gone.
-          */}
-        {/*
-          * The Copilot opens OVER the console rather than replacing it, so the
-          * list or case an officer was reading is still there behind the panel
-          * and is still there when they close it.
-          */}
-        <button
-          className={copilot ? 'on' : ''}
-          onClick={() => setCopilot((v) => !v)}
-          aria-expanded={copilot}
-        >
-          🤖 {t('nav.copilot')}
-        </button>
-        <div className="live">
-          <span className={`dot${live ? ' on' : ''}`} />
-          {live ? t('common.live') : t('common.reconnecting')}
+        <div className="poc-nav-left">
+          <button
+            className={openId === null ? 'on' : ''}
+            onClick={() => setOpenId(null)}
+          >
+            {t('nav.petitions')}
+          </button>
+          <button
+            className={`nav-copilot-btn ${copilot ? 'on' : ''}`}
+            onClick={() => setCopilot((v) => !v)}
+            aria-expanded={copilot}
+          >
+            🤖 {t('nav.copilot')}
+          </button>
         </div>
+
+        {/* Global Search Box in Grey Navbar */}
+        <form className="nav-search-form" onSubmit={handleNavSearch} role="search">
+          <div className="nav-search-box">
+            <input
+              ref={searchInputRef}
+              type="text"
+              className="nav-search-input"
+              value={searchQ}
+              onChange={(e) => {
+                setSearchQ(e.target.value);
+                if (e.target.value === '') {
+                  setActiveSearch('');
+                }
+              }}
+              placeholder={t('dash.searchPlaceholder') || 'Reference number, subject or citizen name...'}
+              aria-label={t('common.search')}
+            />
+            {searchQ ? (
+              <button
+                type="button"
+                className="nav-search-clear"
+                onClick={handleClearSearch}
+                title="Clear search"
+                aria-label="Clear search"
+              >
+                <svg viewBox="0 0 14 14" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                  <path d="M3 3l8 8M11 3l-8 8" />
+                </svg>
+              </button>
+            ) : (
+              <kbd className="nav-search-kbd">Ctrl K</kbd>
+            )}
+          </div>
+          <button type="submit" className="nav-search-btn" id="btn-nav-search">
+            <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="8.5" cy="8.5" r="5.5" />
+              <path d="M12.5 12.5L17 17" />
+            </svg>
+            <span>{t('common.search')}</span>
+          </button>
+        </form>
       </nav>
 
       <main className="poc-main">
         {openId === null
-          ? <OfficerDashboard feed={feed} live={live} onOpen={setOpenId} />
+          ? <OfficerDashboard feed={feed} live={live} onOpen={setOpenId} searchQ={activeSearch} onClearSearch={handleClearSearch} />
           : <PetitionDetail petitionId={openId} feed={feed} onBack={() => setOpenId(null)} />}
       </main>
 
