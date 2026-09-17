@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { pocApi, fmtTime, pct, getPocToken } from './pocApi';
 import { useI18n } from '../lib/i18n';
 import { transliterate, hasTamil, hasLatin, displayName, displayAddress } from '../lib/translit';
-import { AnalysisPanel } from './AnalysisPanel';
+import { AnalysisPanel, AISummaryCard } from './AnalysisPanel';
 import { WorkflowStages } from './WorkflowStages';
 
 /**
@@ -220,48 +220,41 @@ export function PetitionDetail({ petitionId, feed, onBack }: {
             */}
           <LetterTab d={d} onRefresh={load} />
 
-          {/*
-            * Where the file has got to, shown whether or not the analysis has
-            * run: a petition moves between desks regardless of what the AI
-            * has managed to say about it.
-            */}
-          <WorkflowStages petitionId={petitionId} feed={feed} />
+          {/* AI Summary directly below the uploaded document */}
+          <AISummaryCard d={d} />
 
-          <div className="poc-card" id="ai-analysis">
-            <header>
-              <h3>{t('detail.tabAnalysis')}</h3>
-              <div className="grow" />
-              {analysed && <span className="poc-chip ai">{pct(d.analysis.overall_confidence)}</span>}
-            </header>
-            <div className="body">
-              {analysed ? (
-                <>
-                  <AnalysisPanel d={d} />
+          <div id="ai-analysis">
+            {analysed ? (
+              <>
+                <AnalysisPanel d={d} />
 
-                  {/*
-                    * Closing actions, at the end of the analysis where the
-                    * officer finishes reading. OK returns to the dashboard;
-                    * Download produces the official report as a PDF.
-                    */}
-                  {pdfErr && <div className="poc-note err" style={{ marginTop: 12 }}>{pdfErr}</div>}
-                  <div className="reply-actions">
-                    <button className="btn primary" onClick={onBack}>{t('agent.ok')}</button>
-                    <button className="btn" disabled={pdfBusy} onClick={downloadReport}>
-                      {pdfBusy ? t('agent.preparing') : t('agent.download')}
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <div className="empty">
-                  <p>{t('detail.notAnalysed')}</p>
-                  <button className="btn primary" disabled={!!busy} onClick={analyse}>
-                    {busy === 'analyse'
-                      ? <><span className="spin" /> {t('detail.analysing')}</>
-                      : t('detail.runAnalysis')}
+                {/*
+                  * Closing actions, at the end of the analysis where the
+                  * officer finishes reading. OK returns to the dashboard;
+                  * Download produces the official report as a PDF.
+                  */}
+                {pdfErr && <div className="poc-note err" style={{ marginTop: 12 }}>{pdfErr}</div>}
+                <div className="reply-actions">
+                  <button className="btn primary" onClick={onBack}>{t('agent.ok')}</button>
+                  <button className="btn" disabled={pdfBusy} onClick={downloadReport}>
+                    {pdfBusy ? t('agent.preparing') : t('agent.download')}
                   </button>
                 </div>
-              )}
-            </div>
+              </>
+            ) : (
+              <div className="poc-card">
+                <div className="body">
+                  <div className="empty">
+                    <p>{t('detail.notAnalysed')}</p>
+                    <button className="btn primary" disabled={!!busy} onClick={analyse}>
+                      {busy === 'analyse'
+                        ? <><span className="spin" /> {t('detail.analysing')}</>
+                        : t('detail.runAnalysis')}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -307,6 +300,8 @@ export function PetitionDetail({ petitionId, feed, onBack }: {
             </div>
           </div>
 
+          {/* Workflow Stages moved to the right side underneath the AI Overview box */}
+          <WorkflowStages petitionId={petitionId} feed={feed} />
         </div>
       </div>
     </>
@@ -320,6 +315,23 @@ function LetterTab({ d, onRefresh }: { d: any; onRefresh: () => void }) {
   const doc = d.documents?.find((x: any) => x.id === openDoc);
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [previewErr, setPreviewErr] = useState('');
+  const [modalDoc, setModalDoc] = useState<any | null>(null);
+  const [zoom, setZoom] = useState(1);
+
+  // Close modal on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setModalDoc(null);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  const handleViewDoc = (x: any) => {
+    setOpenDoc(x.id);
+    setModalDoc(x);
+    setZoom(1);
+  };
 
   /*
    * The file endpoint authenticates from the Authorization header, which an
@@ -365,12 +377,6 @@ function LetterTab({ d, onRefresh }: { d: any; onRefresh: () => void }) {
 
       {/*
         * The uploaded document, as one attachment card.
-        *
-        * Previously a table listed the file and a second card previewed it
-        * below, which meant two headings and a click to see a document the
-        * officer had just uploaded. The file is attached to the case, so it is
-        * simply shown: a compact file strip with its state, and the document
-        * itself beneath it.
         */}
       <div className="poc-card">
         <header>
@@ -390,12 +396,21 @@ function LetterTab({ d, onRefresh }: { d: any; onRefresh: () => void }) {
               <div className="attach-list">
                 {d.documents.map((x: any) => {
                   const reading = x.ocr_status === 'PENDING' || x.ocr_status === 'PROCESSING';
+                  const isSelected = x.id === openDoc;
                   return (
-                    <button
+                    <div
                       key={x.id}
-                      className={`attach${x.id === openDoc ? ' on' : ''}`}
+                      role="button"
+                      tabIndex={0}
+                      className={`attach${isSelected ? ' on' : ''}`}
                       onClick={() => setOpenDoc(x.id)}
-                      aria-pressed={x.id === openDoc}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setOpenDoc(x.id);
+                        }
+                      }}
+                      aria-pressed={isSelected}
                     >
                       <span className="ico" aria-hidden="true">
                         {x.mime_type?.startsWith('image/') ? '🖼' : '📄'}
@@ -416,7 +431,23 @@ function LetterTab({ d, onRefresh }: { d: any; onRefresh: () => void }) {
                           )}
                         </span>
                       </span>
-                    </button>
+                      {/* View button in the exact marked location */}
+                      <button
+                        type="button"
+                        className="attach-view-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleViewDoc(x);
+                        }}
+                        title={lang === 'ta' ? 'ஆவணத்தைப் பார்க்கவும்' : 'View Document'}
+                      >
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                          <circle cx="12" cy="12" r="3" />
+                        </svg>
+                        <span>{lang === 'ta' ? 'பார்வையிடு' : 'View'}</span>
+                      </button>
+                    </div>
                   );
                 })}
               </div>
@@ -424,6 +455,30 @@ function LetterTab({ d, onRefresh }: { d: any; onRefresh: () => void }) {
               {/* The document itself. */}
               {doc && (
                 <div className="attach-view">
+                  <div className="attach-view-bar">
+                    <span className="attach-view-title">{doc.file_name || doc.title}</span>
+                    <div className="actions">
+                      <button
+                        type="button"
+                        className="btn small"
+                        onClick={() => {
+                          setModalDoc(doc);
+                          setZoom(1);
+                        }}
+                      >
+                        🔍 {lang === 'ta' ? 'முழுத்திரை' : 'Fullscreen'}
+                      </button>
+                      {blobUrl && (
+                        <a
+                          href={blobUrl}
+                          download={doc.file_name || 'document'}
+                          className="btn small"
+                        >
+                          ⬇ {lang === 'ta' ? 'பதிவிறக்கு' : 'Download'}
+                        </a>
+                      )}
+                    </div>
+                  </div>
                   {previewErr ? (
                     <div className="poc-note err">{previewErr}</div>
                   ) : !blobUrl ? (
@@ -431,7 +486,16 @@ function LetterTab({ d, onRefresh }: { d: any; onRefresh: () => void }) {
                   ) : (
                     <div className="poc-preview">
                       {doc.mime_type?.startsWith('image/') ? (
-                        <img src={blobUrl} alt={doc.title} />
+                        <img
+                          src={blobUrl}
+                          alt={doc.title}
+                          style={{ cursor: 'zoom-in' }}
+                          onClick={() => {
+                            setModalDoc(doc);
+                            setZoom(1);
+                          }}
+                          title={lang === 'ta' ? 'பெரிதாக்க கிளிக் செய்யவும்' : 'Click to enlarge'}
+                        />
                       ) : doc.mime_type === 'application/pdf' ? (
                         <iframe src={blobUrl} title={doc.title} />
                       ) : (
@@ -449,11 +513,91 @@ function LetterTab({ d, onRefresh }: { d: any; onRefresh: () => void }) {
         </div>
       </div>
 
-      {doc && (
-        <>
-          <DocumentTextCard doc={doc} />
-        </>
+      {/* Document Viewer Modal */}
+      {modalDoc && (
+        <div className="doc-modal-scrim" onClick={() => setModalDoc(null)}>
+          <div className="doc-modal-container" onClick={(e) => e.stopPropagation()}>
+            <div className="doc-modal-header">
+              <div className="doc-modal-title">
+                <span style={{ fontSize: '20px' }}>
+                  {modalDoc.mime_type?.startsWith('image/') ? '🖼' : '📄'}
+                </span>
+                <h4>{modalDoc.file_name || modalDoc.title}</h4>
+              </div>
+              <div className="doc-modal-actions">
+                {modalDoc.mime_type?.startsWith('image/') && (
+                  <>
+                    <button
+                      type="button"
+                      className="doc-modal-btn"
+                      onClick={() => setZoom((z) => Math.max(0.5, +(z - 0.25).toFixed(2)))}
+                      title={lang === 'ta' ? 'சிறிதாக்கு' : 'Zoom Out'}
+                    >
+                      🔍-
+                    </button>
+                    <button
+                      type="button"
+                      className="doc-modal-btn"
+                      onClick={() => setZoom(1)}
+                      title={lang === 'ta' ? 'இயல்பு நிலை' : 'Reset Zoom'}
+                    >
+                      {Math.round(zoom * 100)}%
+                    </button>
+                    <button
+                      type="button"
+                      className="doc-modal-btn"
+                      onClick={() => setZoom((z) => Math.min(3, +(z + 0.25).toFixed(2)))}
+                      title={lang === 'ta' ? 'பெரிதாக்கு' : 'Zoom In'}
+                    >
+                      🔍+
+                    </button>
+                  </>
+                )}
+                {blobUrl && (
+                  <a
+                    href={blobUrl}
+                    download={modalDoc.file_name || 'document'}
+                    className="doc-modal-btn"
+                  >
+                    ⬇ {lang === 'ta' ? 'பதிவிறக்கு' : 'Download'}
+                  </a>
+                )}
+                <button
+                  type="button"
+                  className="doc-modal-close"
+                  onClick={() => setModalDoc(null)}
+                  title={lang === 'ta' ? 'மூடு' : 'Close'}
+                  aria-label="Close"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+            <div className="doc-modal-body">
+              {previewErr ? (
+                <div className="poc-note err">{previewErr}</div>
+              ) : !blobUrl ? (
+                <div className="empty"><span className="spin" /> {t('common.loading')}</div>
+              ) : modalDoc.mime_type?.startsWith('image/') ? (
+                <img
+                  src={blobUrl}
+                  alt={modalDoc.title}
+                  className="doc-modal-img"
+                  style={{ transform: `scale(${zoom})`, transformOrigin: 'center center' }}
+                />
+              ) : modalDoc.mime_type === 'application/pdf' ? (
+                <iframe src={blobUrl} title={modalDoc.title} className="doc-modal-iframe" />
+              ) : (
+                <div className="empty">
+                  {t('detail.noPreview')}{' '}
+                  <a href={blobUrl} download={modalDoc.file_name}>{t('detail.downloadFile')}</a>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
+
     </>
   );
 }

@@ -191,14 +191,13 @@ export function OfficerDashboard({ feed, live, onOpen, searchQ = '', onClearSear
                   <th style={{ width: '28%' }}>{t('col.subject')}</th>
                   <th style={{ width: '13%' }}>{t('col.status')}</th>
                   <th style={{ width: '17%' }}>{t('col.suggestion')}</th>
-                  <th style={{ width: '8%', textAlign: 'center' }}>{t('col.docs')}</th>
-                  <th style={{ width: '10%' }}>{t('col.received')}</th>
+                  <th style={{ width: '8%', textAlign: 'right' }}>{t('col.received')}</th>
                 </tr>
               </thead>
               <tbody>
                 {busy && rows.length === 0 ? (
                   <tr>
-                    <td colSpan={7} style={{ textAlign: 'center', padding: '56px 20px' }}>
+                    <td colSpan={6} style={{ textAlign: 'center', padding: '56px 20px' }}>
                       <div className="empty" style={{ margin: 0 }}>
                         <span className="spin" />
                         <div style={{ marginTop: 10, color: '#64748b', fontSize: 13 }}>
@@ -209,7 +208,7 @@ export function OfficerDashboard({ feed, live, onOpen, searchQ = '', onClearSear
                   </tr>
                 ) : rows.length === 0 ? (
                   <tr>
-                    <td colSpan={7} style={{ textAlign: 'center', padding: '52px 20px' }}>
+                    <td colSpan={6} style={{ textAlign: 'center', padding: '52px 20px' }}>
                       {q ? (
                         <div className="table-search-empty">
                           <div className="search-empty-icon">
@@ -286,12 +285,7 @@ export function OfficerDashboard({ feed, live, onOpen, searchQ = '', onClearSear
                             <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>
                               {kb(p.suggested_act, p.suggested_act_ta) || t('dash.noActMatched')}
                             </div>
-                            {p.confidence != null && (
-                              <div className={`poc-meter${p.confidence < 0.6 ? ' low' : ''}`}>
-                                <i style={{ width: `${Math.round(p.confidence * 100)}%` }} />
-                              </div>
-                            )}
-                            <div className="muted" style={{ fontSize: 11 }}>{pct(p.confidence)} {t('doc.confidence')}</div>
+
                           </>
                         ) : p.analysis_status === 'PROCESSING' ? (
                           <span className="muted"><span className="spin" /> {t('dash.analysingText')}</span>
@@ -301,10 +295,7 @@ export function OfficerDashboard({ feed, live, onOpen, searchQ = '', onClearSear
                           <span className="muted">{t('dash.pending')}</span>
                         )}
                       </td>
-                      <td className="mono" style={{ textAlign: 'center', fontWeight: 600, color: '#0f172a' }}>
-                        {p.document_count}
-                      </td>
-                      <td className="small muted nw">{fmtTime(p.created_at, lang)}</td>
+                      <td className="small muted nw" style={{ textAlign: 'right' }}>{fmtTime(p.created_at, lang)}</td>
                     </tr>
                   ))
                 )}

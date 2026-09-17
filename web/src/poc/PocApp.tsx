@@ -174,47 +174,49 @@ export function PocApp() {
           </button>
         </div>
 
-        {/* Global Search Box in Grey Navbar */}
-        <form className="nav-search-form" onSubmit={handleNavSearch} role="search">
-          <div className="nav-search-box">
-            <input
-              ref={searchInputRef}
-              type="text"
-              className="nav-search-input"
-              value={searchQ}
-              onChange={(e) => {
-                setSearchQ(e.target.value);
-                if (e.target.value === '') {
-                  setActiveSearch('');
-                }
-              }}
-              placeholder={t('dash.searchPlaceholder') || 'Reference number, subject or citizen name...'}
-              aria-label={t('common.search')}
-            />
-            {searchQ ? (
-              <button
-                type="button"
-                className="nav-search-clear"
-                onClick={handleClearSearch}
-                title="Clear search"
-                aria-label="Clear search"
-              >
-                <svg viewBox="0 0 14 14" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                  <path d="M3 3l8 8M11 3l-8 8" />
-                </svg>
-              </button>
-            ) : (
-              <kbd className="nav-search-kbd">Ctrl K</kbd>
-            )}
-          </div>
-          <button type="submit" className="nav-search-btn" id="btn-nav-search">
-            <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <circle cx="8.5" cy="8.5" r="5.5" />
-              <path d="M12.5 12.5L17 17" />
-            </svg>
-            <span>{t('common.search')}</span>
-          </button>
-        </form>
+        {/* Global Search Box in Grey Navbar - Shown ONLY on Dashboard */}
+        {openId === null && (
+          <form className="nav-search-form" onSubmit={handleNavSearch} role="search">
+            <div className="nav-search-box">
+              <input
+                ref={searchInputRef}
+                type="text"
+                className="nav-search-input"
+                value={searchQ}
+                onChange={(e) => {
+                  setSearchQ(e.target.value);
+                  if (e.target.value === '') {
+                    setActiveSearch('');
+                  }
+                }}
+                placeholder={t('dash.searchPlaceholder') || 'Reference number, subject or citizen name...'}
+                aria-label={t('common.search')}
+              />
+              {searchQ ? (
+                <button
+                  type="button"
+                  className="nav-search-clear"
+                  onClick={handleClearSearch}
+                  title="Clear search"
+                  aria-label="Clear search"
+                >
+                  <svg viewBox="0 0 14 14" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                    <path d="M3 3l8 8M11 3l-8 8" />
+                  </svg>
+                </button>
+              ) : (
+                <kbd className="nav-search-kbd">Ctrl K</kbd>
+              )}
+            </div>
+            <button type="submit" className="nav-search-btn" id="btn-nav-search">
+              <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="8.5" cy="8.5" r="5.5" />
+                <path d="M12.5 12.5L17 17" />
+              </svg>
+              <span>{t('common.search')}</span>
+            </button>
+          </form>
+        )}
       </nav>
 
       <main className="poc-main">

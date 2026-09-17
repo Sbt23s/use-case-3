@@ -28,6 +28,16 @@ import { runGlobalCopilot } from '../ai/agents/eGovCopilot.js';
 import { publish, subscribe } from '../core/realtime.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
+// Register custom SQLite function for instantaneous bilingual transliterated searching
+try {
+  db.function('translit_en', (str: string) => {
+    if (!str) return '';
+    return translitDisplayName(str, 'en');
+  });
+} catch {
+  // function already registered
+}
 const UPLOAD_DIR = resolve(__dirname, '../../data/uploads');
 if (!existsSync(UPLOAD_DIR)) mkdirSync(UPLOAD_DIR, { recursive: true });
 
@@ -928,15 +938,66 @@ cpRouter.get('/petitions', requirePermission('PETITION_VIEW'), async (req, res) 
   if (q) {
     const cleanQ = q.trim();
     const noHash = cleanQ.startsWith('#') ? cleanQ.slice(1).trim() : cleanQ;
-    where.push('(p.reference_no LIKE ? OR p.subject LIKE ? OR p.citizen_name LIKE ? OR p.citizen_phone LIKE ? OR CAST(p.id AS TEXT) LIKE ?)');
-    params.push(`%${noHash}%`, `%${cleanQ}%`, `%${cleanQ}%`, `%${cleanQ}%`, `%${noHash}%`);
+    const term = `%${cleanQ}%`;
+    const noHashTerm = `%${noHash}%`;
+
+    where.push(`(
+      p.reference_no LIKE ?
+      OR p.subject LIKE ?
+      OR p.citizen_name LIKE ?
+      OR translit_en(p.citizen_name) LIKE ?
+      OR p.citizen_phone LIKE ?
+      OR CAST(p.id AS TEXT) LIKE ?
+      OR p.status LIKE ?
+      OR p.analysis_status LIKE ?
+      OR dept.name LIKE ?
+      OR dept.name_ta LIKE ?
+      OR act.short_name LIKE ?
+      OR act.short_name_ta LIKE ?
+      OR a.main_issue LIKE ?
+      OR a.result_json LIKE ?
+      OR tc.translated LIKE ?
+    )`);
+    params.push(
+      noHashTerm, // p.reference_no
+      term,       // p.subject
+      term,       // p.citizen_name
+      term,       // translit_en(p.citizen_name)
+      term,       // p.citizen_phone
+      noHashTerm, // p.id
+      term,       // p.status
+      term,       // p.analysis_status
+      term,       // dept.name
+      term,       // dept.name_ta
+      term,       // act.short_name
+      term,       // act.short_name_ta
+      term,       // a.main_issue
+      term,       // a.result_json
+      term,       // tc.translated
+    );
   }
   if (status) { where.push('p.status = ?'); params.push(status); }
 
   const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : '';
 
-  // 1. Fast indexed count of total matching petitions (<1ms)
-  const countRow = db.prepare(`SELECT COUNT(*) AS total FROM cp_petition p ${whereClause}`).get(...params) as any;
+  // 1. Fast indexed count of total matching petitions
+  const countRow = db.prepare(`
+    SELECT COUNT(DISTINCT p.id) AS total
+    FROM cp_petition p
+    LEFT JOIN (
+      SELECT a1.petition_id, a1.department_id, a1.act_id, a1.main_issue, a1.result_json
+      FROM cp_analysis a1
+      INNER JOIN (
+        SELECT petition_id, MAX(id) AS max_id
+        FROM cp_analysis
+        GROUP BY petition_id
+      ) a2 ON a1.id = a2.max_id
+    ) a ON a.petition_id = p.id
+    LEFT JOIN kb_department dept ON dept.id = a.department_id
+    LEFT JOIN kb_act act ON act.id = a.act_id
+    LEFT JOIN translation_cache tc ON tc.source_text = p.subject
+    ${whereClause}
+  `).get(...params) as any;
   const total = countRow?.total ?? 0;
 
   // 2. Pagination parameters (defaults to 25 items per page)
@@ -967,7 +1028,7 @@ cpRouter.get('/petitions', requirePermission('PETITION_VIEW'), async (req, res) 
       GROUP BY petition_id
     ) doc ON doc.petition_id = p.id
     LEFT JOIN (
-      SELECT a1.petition_id, a1.overall_confidence, a1.priority, a1.department_id, a1.act_id
+      SELECT a1.petition_id, a1.overall_confidence, a1.priority, a1.department_id, a1.act_id, a1.main_issue, a1.result_json
       FROM cp_analysis a1
       INNER JOIN (
         SELECT petition_id, MAX(id) AS max_id
@@ -977,7 +1038,9 @@ cpRouter.get('/petitions', requirePermission('PETITION_VIEW'), async (req, res) 
     ) a ON a.petition_id = p.id
     LEFT JOIN kb_department dept ON dept.id = a.department_id
     LEFT JOIN kb_act act ON act.id = a.act_id
+    LEFT JOIN translation_cache tc ON tc.source_text = p.subject
     ${whereClause}
+    GROUP BY p.id
     ORDER BY p.created_at DESC, p.id DESC
     ${paginationSql}
   `).all(...queryParams);

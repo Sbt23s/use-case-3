@@ -35,7 +35,7 @@ export function seedExpandedActs(db: any) {
     LAW: { code: 'LAW', name: 'Law Department', name_ta: 'சட்டத்துறை', keywords: 'law, legal aid, lok adalat, sles, சட்டம், இலவச சட்ட உதவி, லோக் அதாலத்' },
     HRCE: { code: 'HRCE', name: 'HR & CE Department', name_ta: 'இந்து சமய அறநிலையத் துறை', keywords: 'temple, hr ce, endowment, choultry, கோவில், அறநிலையத்துறை, சத்திரம்' },
     ARCH: { code: 'ARCH', name: 'Archaeology Department', name_ta: 'தொல்லியல் துறை', keywords: 'monuments, archaeology, heritage, excavation, தொல்லியல், பழங்கால சின்னங்கள்' },
-    MAWS: { code: 'MAWS', name: 'Municipal Administration & Water Supply', name_ta: 'நகராட்சி நிருவாகம் மற்றும் குடிநீர் வழங்கல் துறை', keywords: 'corporation, municipality, civic, tax, drainage, நகராட்சி, மாநகராட்சி, பாதாள சாக்கடை' },
+    MAWS: { code: 'MAWS', name: 'Municipal Administration & Water Supply', name_ta: 'நகராட்சி நிருவாகத் துறை (மாநகராட்சி)', keywords: 'corporation, municipality, civic, tax, drainage, நகராட்சி, மாநகராட்சி, பாதாள சாக்கடை' },
     GCC: { code: 'GCC', name: 'Greater Chennai Corporation', name_ta: 'சென்னை பெருநகர மாநகராட்சி', keywords: 'chennai corporation, gcc, rippon building, சென்னை மாநகராட்சி' },
     HUD: { code: 'HUD', name: 'Housing & Urban Development', name_ta: 'வீட்டுவசதி மற்றும் நகர்ப்புற வளர்ச்சித் துறை', keywords: 'housing, cmda, dtcp, apartment, tenancy, rera, slum, வீட்டுவசதி, அடுக்குமாடி' },
     IND: { code: 'IND', name: 'Industries, Investment Promotion & Commerce', name_ta: 'தொழில், முதலீட்டு ஊக்குவிப்பு மற்றும் வர்த்தகத் துறை', keywords: 'industries, guidance, single window, palm board, தொழில், ஒற்றைச் சாளரம்' },

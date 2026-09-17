@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useState } from 'react';
 import { pocApi, fmtTime } from './pocApi';
 import { useI18n } from '../lib/i18n';
 
@@ -43,7 +43,6 @@ export function WorkflowStages({ petitionId, feed }: { petitionId: number; feed:
   const [data, setData] = useState<WorkflowData | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
-  const [showHistory, setShowHistory] = useState(false);
 
   const load = useCallback(() => {
     pocApi.get<WorkflowData>(`/cp/petitions/${petitionId}/workflow`)
@@ -81,13 +80,6 @@ export function WorkflowStages({ petitionId, feed }: { petitionId: number; feed:
     }
   }
 
-  // The next stage in the sequence, when there is one left.
-  const next = !data.started
-    ? data.stages[0]
-    : currentIndex >= 0 && currentIndex < data.stages.length - 1
-      ? data.stages[currentIndex + 1]
-      : null;
-
   return (
     <div className="poc-card wfs-card">
       <header>
@@ -108,71 +100,45 @@ export function WorkflowStages({ petitionId, feed }: { petitionId: number; feed:
               ? (i === 0 ? 'now' : 'next')
               : i < currentIndex ? 'done' : i === currentIndex ? 'now' : 'next';
 
+            const arrowActive = data.started && i <= currentIndex;
+
             return (
-              <li
-                key={s.code}
-                className={`wfs-step ${state}${s.optional ? ' optional' : ''}`}
-                aria-current={state === 'now' ? 'step' : undefined}
-              >
-                <span className="wfs-dot" aria-hidden="true">
-                  {state === 'done' ? '✓' : i + 1}
-                </span>
-                <span className="wfs-name">{name(s)}</span>
-                {s.optional && <span className="wfs-opt">{t('wfs.optional')}</span>}
-              </li>
+              <Fragment key={s.code}>
+                {i > 0 && (
+                  <li className={`wfs-arrow-item ${arrowActive ? 'done' : ''}`} aria-hidden="true">
+                    <svg
+                      className="wfs-arrow-icon"
+                      width="15"
+                      height="15"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.4"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <line x1="4" y1="12" x2="20" y2="12" />
+                      <polyline points="13 5 20 12 13 19" />
+                    </svg>
+                  </li>
+                )}
+                <li
+                  className={`wfs-step ${state}${s.optional ? ' optional' : ''}`}
+                  aria-current={state === 'now' ? 'step' : undefined}
+                  style={{ cursor: busy ? 'wait' : 'pointer' }}
+                  onClick={() => !busy && moveTo(s.code)}
+                  title={`${t('wfs.setStage')}: ${name(s)}`}
+                >
+                  <span className="wfs-dot" aria-hidden="true">
+                    {state === 'done' ? '✓' : i + 1}
+                  </span>
+                  <span className="wfs-name">{name(s)}</span>
+                  {s.optional && <span className="wfs-opt">{t('wfs.optional')}</span>}
+                </li>
+              </Fragment>
             );
           })}
         </ol>
-
-        <div className="wfs-actions">
-          {next && (
-            <button className="btn primary sm" disabled={busy} onClick={() => moveTo(next.code)}>
-              {busy ? t('wfs.saving') : `${t('wfs.advance')}: ${name(next)}`}
-            </button>
-          )}
-          {/*
-            * Any stage can be selected, not only the next one.
-            *
-            * A case genuinely skips stages (a matter settled without a
-            * hearing) and genuinely goes back (a file returned for a fuller
-            * report). Forcing a strict forward march would push officers to
-            * keep the real position outside the system.
-            */}
-          <select
-            className="wfs-select"
-            value={data.current}
-            disabled={busy}
-            onChange={(e) => moveTo(e.target.value)}
-            aria-label={t('wfs.setStage')}
-          >
-            {data.stages.map((s) => (
-              <option key={s.code} value={s.code}>{name(s)}</option>
-            ))}
-          </select>
-
-          {data.history.length > 0 && (
-            <button className="btn sm" onClick={() => setShowHistory((v) => !v)}>
-              {showHistory ? t('wfs.hideHistory') : t('wfs.showHistory')} ({data.history.length})
-            </button>
-          )}
-        </div>
-
-        {showHistory && (
-          <ul className="wfs-history">
-            {data.history.slice().reverse().map((h) => (
-              <li key={h.id}>
-                <b>{name(data.stages.find((s) => s.code === h.to_stage) ?? { code: '', en: h.to_stage, ta: h.to_stage })}</b>
-                <span className="muted">
-                  {' · '}{fmtTime(h.created_at, lang)}
-                  {h.changed_by ? ` · ${h.changed_by}` : ''}
-                </span>
-                {h.note && <div className="wfs-note">{h.note}</div>}
-              </li>
-            ))}
-          </ul>
-        )}
-
-        <p className="wfs-foot">{t('wfs.note')}</p>
       </div>
     </div>
   );

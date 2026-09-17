@@ -14,6 +14,140 @@ import { displayName, displayAddress, transliterate, transliterateToTamil, hasTa
 
 interface Bilingual { en: string; ta: string }
 
+export function formatBilingual(b: Bilingual | undefined | null, lang: 'en' | 'ta', fallback = '—'): string {
+  if (!b) return fallback;
+  let text = String(b[lang] || (lang === 'ta' ? b.ta : b.en) || b.en || b.ta || fallback).trim();
+  if (!text) return fallback;
+
+  if (lang === 'en') {
+    if (hasTamil(text)) {
+      text = text.replace(/People named:\s*(.+)$/i, (_m, list) => {
+        const trNames = list.split(',').map((n: string) => displayName(n.trim(), 'en')).join(', ');
+        return `People named: ${trNames}`;
+      }).replace(/Places mentioned:\s*(.+)$/i, (_m, list) => {
+        const trPlaces = list.split(',').map((p: string) => displayAddress(p.trim(), 'en')).join(', ');
+        return `Places mentioned: ${trPlaces}`;
+      }).replace(/Senior citizen — as stated:\s*(.+)$/i, (_m, rest) => {
+        return hasTamil(rest) ? `Senior citizen — as stated: ${transliterate(rest)}` : text;
+      });
+
+      if (hasTamil(text)) {
+        text = transliterate(text);
+      }
+    }
+  } else if (lang === 'ta') {
+    if (hasLatin(text)) {
+      text = text.replace(/குறிப்பிடப்பட்ட நபர்கள்:\s*(.+)$/i, (_m, list) => {
+        const trNames = list.split(',').map((n: string) => displayName(n.trim(), 'ta')).join(', ');
+        return `குறிப்பிடப்பட்ட நபர்கள்: ${trNames}`;
+      }).replace(/குறிப்பிடப்பட்ட இடங்கள்:\s*(.+)$/i, (_m, list) => {
+        const trPlaces = list.split(',').map((p: string) => displayAddress(p.trim(), 'ta')).join(', ');
+        return `குறிப்பிடப்பட்ட இடங்கள்: ${trPlaces}`;
+      });
+
+      const lower = text.trim().toLowerCase();
+      const known = KNOWN_EN_TO_TA[lower];
+      if (known) {
+        text = known;
+      } else {
+        text = text
+          .replace(/\bSec\.?\s*(\d+)/gi, 'பிரிவு $1')
+          .replace(/\bSection\s*(\d+)/gi, 'பிரிவு $1')
+          .replace(/Encroachment on public roads/gi, 'பொதுச் சாலைகளில் ஆக்கிரமிப்பு')
+          .replace(/Powers of inspection/gi, 'ஆய்வு அதிகாரம்')
+          .replace(/Drinking water supply/gi, 'குடிநீர் விநியோகம்')
+          .replace(/Panchayat audit and dissolution/gi, 'ஊராட்சி தணிக்கை மற்றும் கலைப்பு')
+          .replace(/Claim for maintenance/gi, 'பராமரிப்பு கோரிக்கை')
+          .replace(/Tribunal order/gi, 'தீர்ப்பாய உத்தரவு')
+          .replace(/Rural Development\s*(?:&|and)\s*Panchayat Raj(?:\s*Department)?/gi, 'ஊரக வளர்ச்சி மற்றும் ஊராட்சித் துறை');
+
+        const taCount = (text.match(/[\u0B80-\u0BFF]/g) || []).length;
+        const enCount = (text.match(/[A-Za-z]/g) || []).length;
+        if (enCount > 0 && taCount === 0 && text.split(/\s+/).length <= 3) {
+          text = transliterateToTamil(text);
+        }
+      }
+    }
+  }
+  return text;
+}
+
+/**
+ * Dedicated AI Summary Card positioned directly underneath the uploaded document.
+ * Updates in real-time as analysis progresses and completes.
+ */
+export function AISummaryCard({ d }: { d: any }) {
+  const { lang, t: tr } = useI18n();
+  const a = d?.analysis;
+  const full = a?.full;
+  const isPending = (d?.documents ?? []).some(
+    (x: any) => x.ocr_status === 'PENDING' || x.ocr_status === 'PROCESSING',
+  ) || d?.petition?.analysis_status === 'PENDING'
+    || d?.petition?.analysis_status === 'PROCESSING';
+
+  const t = (k: string) => tr(`an.${k}`);
+  const v = (b: Bilingual | undefined | null, fallback = '—') => formatBilingual(b, lang, fallback);
+
+  if (!full && !isPending) return null;
+
+  return (
+    <div className="poc-card ai-summary-card" id="ai-summary">
+      <header>
+        <h3>{t('summary')}</h3>
+        <div className="grow" />
+        {full?.overall_confidence != null ? (
+          <span className={`poc-chip ${full.overall_confidence < 0.6 ? 'warn' : 'ai'}`}>
+            {pct(full.overall_confidence)}
+          </span>
+        ) : isPending ? (
+          <span className="poc-chip ai">
+            <span className="spin" /> {lang === 'ta' ? 'பகுப்பாய்வு நடக்கிறது...' : 'Analysing...'}
+          </span>
+        ) : null}
+      </header>
+      <div className="body">
+        {isPending && !full ? (
+          <div className="empty">
+            <span className="spin" /> {lang === 'ta' ? 'ஆவணம் பகுப்பாய்வு செய்யப்படுகிறது...' : 'Analysing document in real-time...'}
+          </div>
+        ) : full ? (
+          <>
+            <p style={{ fontSize: '14px', lineHeight: 1.65, color: 'var(--ink)' }}>{v(full.summary)}</p>
+            <dl className="kv">
+              <dt>{t('mainIssue')}</dt><dd>{v(full.main_issue)}</dd>
+              <dt>{t('request')}</dt><dd>{v(full.petitioner_request)}</dd>
+              {full.sub_issues?.length > 0 && (
+                <>
+                  <dt>{t('subIssues')}</dt>
+                  <dd>{full.sub_issues.map((s: Bilingual) => v(s)).join(' · ')}</dd>
+                </>
+              )}
+            </dl>
+
+            {full.detected_concepts?.length > 0 && (
+              <>
+                <h4 className="mt">{t('understood')}</h4>
+                <div className="row">
+                  {full.detected_concepts.map((c: any) => (
+                    <span key={c.id} className="poc-chip ai" title={c.evidence?.join(', ')}>
+                      {c.label?.[lang] ?? c.id}
+                    </span>
+                  ))}
+                </div>
+                <p className="small muted mt" style={{ marginBottom: 0 }}>
+                  {lang === 'ta'
+                    ? 'மனுவின் உரையிலிருந்து கண்டறியப்பட்டது. இதுவே பொருத்தத்திற்கு அடிப்படை.'
+                    : 'Detected from the petition text. These drive the matching below.'}
+                </p>
+              </>
+            )}
+          </>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 export function AnalysisPanel({ d }: { d: any }) {
   /*
    * The analysis language follows the application-wide toggle in the header.
@@ -29,63 +163,7 @@ export function AnalysisPanel({ d }: { d: any }) {
 
   // One phrase book for the whole console; see lib/i18n.tsx.
   const t = (k: string) => tr(`an.${k}`);
-  const v = (b: Bilingual | undefined | null, fallback = '—') => {
-    if (!b) return fallback;
-    let text = String(b[lang] || (lang === 'ta' ? b.ta : b.en) || b.en || b.ta || fallback).trim();
-    if (!text) return fallback;
-
-    if (lang === 'en') {
-      if (hasTamil(text)) {
-        text = text.replace(/People named:\s*(.+)$/i, (_m, list) => {
-          const trNames = list.split(',').map((n: string) => displayName(n.trim(), 'en')).join(', ');
-          return `People named: ${trNames}`;
-        }).replace(/Places mentioned:\s*(.+)$/i, (_m, list) => {
-          const trPlaces = list.split(',').map((p: string) => displayAddress(p.trim(), 'en')).join(', ');
-          return `Places mentioned: ${trPlaces}`;
-        }).replace(/Senior citizen — as stated:\s*(.+)$/i, (_m, rest) => {
-          return hasTamil(rest) ? `Senior citizen — as stated: ${transliterate(rest)}` : text;
-        });
-
-        if (hasTamil(text)) {
-          text = transliterate(text);
-        }
-      }
-    } else if (lang === 'ta') {
-      if (hasLatin(text)) {
-        text = text.replace(/குறிப்பிடப்பட்ட நபர்கள்:\s*(.+)$/i, (_m, list) => {
-          const trNames = list.split(',').map((n: string) => displayName(n.trim(), 'ta')).join(', ');
-          return `குறிப்பிடப்பட்ட நபர்கள்: ${trNames}`;
-        }).replace(/குறிப்பிடப்பட்ட இடங்கள்:\s*(.+)$/i, (_m, list) => {
-          const trPlaces = list.split(',').map((p: string) => displayAddress(p.trim(), 'ta')).join(', ');
-          return `குறிப்பிடப்பட்ட இடங்கள்: ${trPlaces}`;
-        });
-
-        const lower = text.trim().toLowerCase();
-        const known = KNOWN_EN_TO_TA[lower];
-        if (known) {
-          text = known;
-        } else {
-          text = text
-            .replace(/\bSec\.?\s*(\d+)/gi, 'பிரிவு $1')
-            .replace(/\bSection\s*(\d+)/gi, 'பிரிவு $1')
-            .replace(/Encroachment on public roads/gi, 'பொதுச் சாலைகளில் ஆக்கிரமிப்பு')
-            .replace(/Powers of inspection/gi, 'ஆய்வு அதிகாரம்')
-            .replace(/Drinking water supply/gi, 'குடிநீர் விநியோகம்')
-            .replace(/Panchayat audit and dissolution/gi, 'ஊராட்சி தணிக்கை மற்றும் கலைப்பு')
-            .replace(/Claim for maintenance/gi, 'பராமரிப்பு கோரிக்கை')
-            .replace(/Tribunal order/gi, 'தீர்ப்பாய உத்தரவு')
-            .replace(/Rural Development\s*(?:&|and)\s*Panchayat Raj(?:\s*Department)?/gi, 'ஊரக வளர்ச்சி மற்றும் ஊராட்சித் துறை');
-
-          const taCount = (text.match(/[\u0B80-\u0BFF]/g) || []).length;
-          const enCount = (text.match(/[A-Za-z]/g) || []).length;
-          if (enCount > 0 && taCount === 0 && text.split(/\s+/).length <= 3) {
-            text = transliterateToTamil(text);
-          }
-        }
-      }
-    }
-    return text;
-  };
+  const v = (b: Bilingual | undefined | null, fallback = '—') => formatBilingual(b, lang, fallback);
 
   if (!full) {
     // An analysis stored before the bilingual format was introduced.
@@ -98,12 +176,6 @@ export function AnalysisPanel({ d }: { d: any }) {
 
   return (
     <>
-      <div className="poc-verify">
-        <b>{t('verifyTitle')}</b>
-        {t('verifyBody')}
-      </div>
-
-
       {/* ---------------- reasoning flow ---------------- */}
       <div className="poc-card">
         <header><h3>{t('flow')}</h3></header>
@@ -127,47 +199,6 @@ export function AnalysisPanel({ d }: { d: any }) {
               </span>
             ))}
           </div>
-        </div>
-      </div>
-
-      {/* ---------------- summary ---------------- */}
-      <div className="poc-card">
-        <header>
-          <h3>{t('summary')}</h3>
-          <span className={`poc-chip ${full.overall_confidence < 0.6 ? 'warn' : 'ai'}`}>
-            {pct(full.overall_confidence)}
-          </span>
-        </header>
-        <div className="body">
-          <p>{v(full.summary)}</p>
-          <dl className="kv">
-            <dt>{t('mainIssue')}</dt><dd>{v(full.main_issue)}</dd>
-            <dt>{t('request')}</dt><dd>{v(full.petitioner_request)}</dd>
-            {full.sub_issues?.length > 0 && (
-              <>
-                <dt>{t('subIssues')}</dt>
-                <dd>{full.sub_issues.map((s: Bilingual) => v(s)).join(' · ')}</dd>
-              </>
-            )}
-          </dl>
-
-          {full.detected_concepts?.length > 0 && (
-            <>
-              <h4 className="mt">{t('understood')}</h4>
-              <div className="row">
-                {full.detected_concepts.map((c: any) => (
-                  <span key={c.id} className="poc-chip ai" title={c.evidence?.join(', ')}>
-                    {c.label?.[lang] ?? c.id}
-                  </span>
-                ))}
-              </div>
-              <p className="small muted mt" style={{ marginBottom: 0 }}>
-                {lang === 'ta'
-                  ? 'மனுவின் உரையிலிருந்து கண்டறியப்பட்டது. இதுவே பொருத்தத்திற்கு அடிப்படை.'
-                  : 'Detected from the petition text. These drive the matching below.'}
-              </p>
-            </>
-          )}
         </div>
       </div>
 
@@ -243,23 +274,6 @@ export function AnalysisPanel({ d }: { d: any }) {
                   </>
                 )}
               </dl>
-
-              {full.act.section_text && (
-                <>
-                  <h4 className="mt">{t('provision')}</h4>
-                  {/*
-                    * `v()`, not the raw value: section_text is a {en, ta} pair
-                    * like every other knowledge-base name. Rendering the object
-                    * itself threw "Objects are not valid as a React child" and
-                    * blanked the whole page whenever an analysis happened to
-                    * carry a section with text.
-                    */}
-                  <div className="poc-doc" style={{ maxHeight: 180 }}>{v(full.act.section_text)}</div>
-                </>
-              )}
-
-              <h4 className="mt">{t('whyAct')}</h4>
-              <p className="small">{v(full.act.reason)}</p>
 
               {full.act.alternatives?.length > 0 && (
                 <>
@@ -356,34 +370,6 @@ export function AnalysisPanel({ d }: { d: any }) {
         </div>
       </div>
 
-      <div className="poc-grid c2">
-        <div className="poc-card">
-          <header><h3>{t('requiredDocs')}</h3></header>
-          <div className="body">
-            {full.required_documents?.length ? (
-              <ul className="list">
-                {full.required_documents.map((doc: Bilingual, i: number) => <li key={i}>{v(doc)}</li>)}
-              </ul>
-            ) : <p className="small muted">—</p>}
-          </div>
-        </div>
-
-        <div className="poc-card">
-          <header>
-            <h3>{t('missing')}</h3>
-            {full.missing_information?.length > 0 && (
-              <span className="poc-chip warn">{full.missing_information.length}</span>
-            )}
-          </header>
-          <div className="body">
-            {full.missing_information?.length ? (
-              <ul className="list">
-                {full.missing_information.map((m: Bilingual, i: number) => <li key={i}>{v(m)}</li>)}
-              </ul>
-            ) : <p className="small muted">{t('nothingMissing')}</p>}
-          </div>
-        </div>
-      </div>
     </>
   );
 }
