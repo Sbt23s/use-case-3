@@ -51,6 +51,7 @@ export function AiSettingsDialog({ onClose }: { onClose: () => void }) {
   const { t } = useI18n();
   const [providers, setProviders] = useState<Provider[]>([]);
   const [status, setStatus] = useState<Status | null>(null);
+  const [translation, setTranslation] = useState<{ configured: boolean; url: string | null; auth: string; note?: string } | null>(null);
   const [chosen, setChosen] = useState<string | null>(null);
   const [model, setModel] = useState('');
   const [tests, setTests] = useState<Record<string, TestState>>({});
@@ -60,11 +61,12 @@ export function AiSettingsDialog({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     let alive = true;
-    pocApi.get<{ providers: Provider[]; current: Status }>('/cp/ai-providers')
+    pocApi.get<{ providers: Provider[]; current: Status; translation?: any }>('/cp/ai-providers')
       .then((r) => {
         if (!alive) return;
         setProviders(r.providers);
         setStatus(r.current);
+        setTranslation(r.translation ?? null);
         const sel = r.current.selected ?? r.providers.find((p) => p.configured)?.id ?? null;
         setChosen(sel);
         setModel(r.providers.find((p) => p.id === sel)?.model ?? '');
@@ -213,6 +215,23 @@ export function AiSettingsDialog({ onClose }: { onClose: () => void }) {
               </div>
             );
           })}
+
+          {translation && (
+            <div className={`ai-prov on${translation.configured ? '' : ' off'}`} style={{ marginTop: 12 }}>
+              <div className="row">
+                <span className={`dot${translation.configured ? ' on' : ''}`} />
+                <b className="grow">{t('aim.translationService')}</b>
+                {translation.configured ? (
+                  <span className="poc-chip ok">{translation.url ?? t('aim.testOk')}</span>
+                ) : (
+                  <span className="tag">{t('aim.notConfigured')}</span>
+                )}
+              </div>
+              <div className="note" style={{ marginTop: 4 }}>
+                {translation.configured ? t('aim.translateApiActive') : t('aim.translateApiFallback')}
+              </div>
+            </div>
+          )}
 
           <p className="ai-keys-note">{t('aim.keysNote')}</p>
           {err && <div className="note bad">{err}</div>}

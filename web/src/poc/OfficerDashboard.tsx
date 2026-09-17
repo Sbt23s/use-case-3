@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { pocApi, fmtTime, pct, STATUS_LABEL } from './pocApi';
 import { useI18n } from '../lib/i18n';
+import { displayName } from '../lib/translit';
 
 /**
  * Government Grievance Officer dashboard.
@@ -159,7 +160,7 @@ export function OfficerDashboard({ feed, live, onOpen }: {
                       )}
                     </td>
                     <td>
-                      <div className="b">{p.citizen_name}</div>
+                      <div className="b">{displayName(p.citizen_name_display ?? p.citizen_name, lang)}</div>
                       <div className="small muted">{p.citizen_phone ?? '—'}</div>
                     </td>
                     <td style={{ maxWidth: 300 }}>

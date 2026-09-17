@@ -80,16 +80,16 @@ function readTranslation(body: any): string | null {
   if (!body) return null;
   if (typeof body === 'string') return body.trim() || null;
 
-  const direct = body.translatedText ?? body.translation ?? body.result ?? body.text
-    ?? body.output ?? body.data?.translatedText ?? body.data?.translation;
+  const direct = body.translatedText ?? body.translated_text ?? body.translation ?? body.result ?? body.text
+    ?? body.output ?? body.data?.translatedText ?? body.data?.translated_text ?? body.data?.translation;
   if (typeof direct === 'string' && direct.trim()) return direct.trim();
 
   // Google Cloud Translation v2
-  const g = body.data?.translations?.[0]?.translatedText;
+  const g = body.data?.translations?.[0]?.translatedText ?? body.data?.translations?.[0]?.translated_text;
   if (typeof g === 'string' && g.trim()) return g.trim();
 
   // DeepL
-  const d = body.translations?.[0]?.text;
+  const d = body.translations?.[0]?.text ?? body.translations?.[0]?.translated_text;
   if (typeof d === 'string' && d.trim()) return d.trim();
 
   return null;
@@ -116,8 +116,8 @@ export async function translateViaApi(
     const body: Record<string, unknown> = {
       // The same value under each common name, so one shape fits most services.
       text, q: text,
-      source, source_lang: source.toUpperCase(),
-      target, target_lang: target.toUpperCase(),
+      source, source_lang: source.toUpperCase(), source_language: source,
+      target, target_lang: target.toUpperCase(), target_language: target,
       format: 'text',
     };
 

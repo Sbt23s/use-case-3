@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { pocApi, fmtTime, pct, getPocToken } from './pocApi';
 import { useI18n } from '../lib/i18n';
-import { transliterate, hasTamil } from '../lib/translit';
+import { transliterate, hasTamil, hasLatin, displayName, displayAddress } from '../lib/translit';
 import { AnalysisPanel } from './AnalysisPanel';
 import { WorkflowStages } from './WorkflowStages';
 
@@ -100,15 +100,15 @@ export function PetitionDetail({ petitionId, feed, onBack }: {
       const { buildAnalysisReport } = await import('../lib/report');
       const pdf = await buildAnalysisReport({
         referenceNo: d.petition.reference_no,
-        subject: d.petition.subject,
+        subject: d.petition.subject_display ?? d.petition.subject,
         // Display text, not the raw enum: the report prints what it is given,
         // and 'ANALYSED' in a Tamil document is the mixing this must avoid.
         status: t(`status.${d.petition.status}`),
         receivedAt: fmtTime(d.petition.created_at, lang),
         petitioner: {
-          name: d.petition.citizen_name,
+          name: d.petition.citizen_name_display ?? displayName(d.petition.citizen_name, lang),
           phone: d.petition.citizen_phone,
-          address: d.petition.citizen_address,
+          address: d.petition.citizen_address_display ?? displayAddress(d.petition.citizen_address, lang),
           language: d.petition.language,
         },
         extracted: d.extracted_details ?? null,
@@ -561,21 +561,45 @@ function PetitionerCard({ petition: p, extracted }: { petition: any; extracted: 
     const e = extracted?.[field];
     const enteredStr = typeof entered === 'string' ? entered.trim() : '';
     const useExtracted = !enteredStr && !!e?.value;
-    const value = enteredStr || e?.value || '';
-    /*
-     * In the English view a Tamil name or place is rendered in Latin so an
-     * officer who does not read Tamil can work with the file. The original is
-     * shown underneath, because the Tamil is the record and the Latin form is
-     * only a rendering - a citizen's Aadhaar may spell it differently.
-     */
-    const showLatin = lang === 'en' && hasTamil(value);
-    const latin = showLatin ? transliterate(value) : '';
+    const rawValue = enteredStr || e?.value || '';
+
+    // Bilingual display:
+    // If in Tamil mode and value is English, display Tamil translation/transliteration.
+    // If in English mode and value is Tamil, display Latin transliteration.
+    let displayVal = rawValue;
+    let isRenderedDifferent = false;
+
+    if (field === 'name') {
+      const serverDisplay = p.citizen_name_display;
+      if (serverDisplay && serverDisplay !== rawValue) {
+        displayVal = serverDisplay;
+        isRenderedDifferent = true;
+      } else {
+        const computed = displayName(rawValue, lang);
+        if (computed && computed !== rawValue) {
+          displayVal = computed;
+          isRenderedDifferent = true;
+        }
+      }
+    } else if (field === 'address') {
+      const serverDisplay = p.citizen_address_display;
+      if (serverDisplay && serverDisplay !== rawValue) {
+        displayVal = serverDisplay;
+        isRenderedDifferent = true;
+      } else {
+        const computed = displayAddress(rawValue, lang);
+        if (computed && computed !== rawValue) {
+          displayVal = computed;
+          isRenderedDifferent = true;
+        }
+      }
+    }
 
     return (
       <>
         <dt>{label}</dt>
         <dd className={mono ? 'mono' : undefined}>
-          {showLatin ? latin : (value || <span className="muted">{t('common.none')}</span>)}
+          {displayVal || <span className="muted">{t('common.none')}</span>}
           {useExtracted && (
             <span
               className="poc-chip"
@@ -585,9 +609,9 @@ function PetitionerCard({ petition: p, extracted }: { petition: any; extracted: 
               {t('pet.fromDoc')}
             </span>
           )}
-          {showLatin && (
+          {isRenderedDifferent && rawValue && (
             <div className="small muted" style={{ marginTop: 2 }}>
-              {value} <span style={{ opacity: .75 }}>· {t('pet.asWritten')}</span>
+              {rawValue} <span style={{ opacity: .75 }}>· {t('pet.asWritten')}</span>
             </div>
           )}
         </dd>

@@ -157,10 +157,16 @@ function word(w: string): string {
 }
 
 const TAMIL = /[஀-௿]/;
+const LATIN = /[a-zA-Z]/;
 
 /** True when the text contains any Tamil script. */
 export function hasTamil(s: unknown): boolean {
   return TAMIL.test(String(s ?? ''));
+}
+
+/** True when the text contains any Latin letters. */
+export function hasLatin(s: unknown): boolean {
+  return LATIN.test(String(s ?? ''));
 }
 
 /**
@@ -184,4 +190,274 @@ export function transliterate(input: unknown): string {
       return before + (core ? word(core) : '') + after;
     })
     .join('');
+}
+
+/**
+ * English to Tamil dictionary for common official terms, names, and places.
+ */
+const KNOWN_EN_TO_TA: Record<string, string> = {
+  // Official & petition placeholders
+  'test petitioner': 'தேர்வு மனுதாரர்',
+  'test': 'தேர்வு',
+  'petitioner': 'மனுதாரர்',
+  'citizen': 'குடிமகன்',
+  'applicant': 'விண்ணப்பதாரர்',
+  'resident': 'குடியிருப்பாளர்',
+  'complainant': 'புகார்தாரர்',
+  'unknown': 'தெரியாதவர்',
+  'na': '—',
+  'n/a': '—',
+
+  // Titles
+  'tmt': 'திருமதி',
+  'thiru': 'திரு',
+  'selvi': 'செல்வி',
+  'mr': 'திரு',
+  'mrs': 'திருமதி',
+  'ms': 'செல்வி',
+  'no': 'எண்',
+
+  // Places & addresses
+  'street': 'தெரு',
+  'road': 'சாலை',
+  'nagar': 'நகர்',
+  'district': 'மாவட்டம்',
+  'taluk': 'வட்டம்',
+  'village': 'கிராமம்',
+  'palayam': 'பாளையம்',
+  'puram': 'புரம்',
+  'patti': 'பட்டி',
+  'kottai': 'கோட்டை',
+  'chennai': 'சென்னை',
+  'coimbatore': 'கோயம்புத்தூர்',
+  'madurai': 'மதுரை',
+  'trichy': 'திருச்சி',
+  'tiruchirappalli': 'திருச்சிராப்பள்ளி',
+  'salem': 'சேலம்',
+  'erode': 'ஈரோடு',
+  'tiruppur': 'திருப்பூர்',
+  'vellore': 'வேலூர்',
+  'thanjavur': 'தஞ்சாவூர்',
+  'tirunelveli': 'திருநெல்வேலி',
+  'kanyakumari': 'கன்னியாகுமரி',
+  'nagercoil': 'நாகர்கோவில்',
+  'thoothukudi': 'தூத்துக்குடி',
+  'cuddalore': 'கடலூர்',
+  'villupuram': 'விழுப்புரம்',
+  'dharmapuri': 'தர்மபுரி',
+  'krishnagiri': 'கிருஷ்ணகிரி',
+  'namakkal': 'நாமக்கல்',
+  'karur': 'கரூர்',
+  'dindigul': 'திண்டுக்கல்',
+  'sivagangai': 'சிவகங்கை',
+  'ramanathapuram': 'ராமநாதபுரம்',
+  'pudukkottai': 'புதுக்கோட்டை',
+  'ariyalur': 'அரியலூர்',
+  'perambalur': 'பெரம்பலூர்',
+  'nilgiris': 'நீலகிரி',
+  'kanchipuram': 'காஞ்சிபுரம்',
+  'tiruvallur': 'திருவள்ளூர்',
+  'tiruvannamalai': 'திருவண்ணாமலை',
+  'peelamedu': 'பீளமேடு',
+
+  // Common Tamil names
+  'gandhi': 'காந்தி',
+  'nehru': 'நேரு',
+  'anna': 'அண்ணா',
+  'kamarajar': 'காமராஜர்',
+  'kuppusami': 'குப்புசாமி',
+  'kuppusamy': 'குப்புசாமி',
+  'sami': 'சாமி',
+  'ramasami': 'ராமசாமி',
+  'ramasamy': 'ராமசாமி',
+  'krishnan': 'கிருஷ்ணன்',
+  'subramanian': 'சுப்பிரமணியன்',
+  'subramaniam': 'சுப்பிரமணியம்',
+  'murugan': 'முருகன்',
+  'lakshmi': 'லட்சுமி',
+  'ammal': 'அம்மாள்',
+  'kumar': 'குமார்',
+  'raman': 'ராமன்',
+  'priya': 'பிரியா',
+  'kavitha': 'கவிதா',
+  'raja': 'ராஜா',
+  'devi': 'தேவி',
+  'suresh': 'சுரேஷ்',
+  'ramesh': 'ரமேஷ்',
+  'selvan': 'செல்வன்',
+  'selvi_name': 'செல்வி',
+  'mani': 'மணி',
+  'anbu': 'அன்பு',
+  'bala': 'பாலா',
+  'balasubramanian': 'பாலசுப்பிரமணியன்',
+  'arun': 'அருண்',
+  'karthik': 'கார்த்திக்',
+  'vimal': 'விமல்',
+  'dinesh': 'தினேஷ்',
+  'prakash': 'பிரகாஷ்',
+  'vijay': 'விஜய்',
+  'ajith': 'அஜித்',
+  'suriya': 'சூர்யா',
+  'radha': 'ராதா',
+  'shanthi': 'சாந்தி',
+  'meena': 'மீனா',
+  'vasanthi': 'வசந்தி',
+  'chitra': 'சித்ரா',
+  'sundaram': 'சுந்தரம்',
+  'moorthy': 'மூர்த்தி',
+  'ganesan': 'கணேசன்',
+  'govind': 'கோவிந்த்',
+  'govindan': 'கோவிந்தன்',
+  'muthu': 'முத்து',
+  'perumal': 'பெருமாள்',
+  'saravanan': 'சரவணன்',
+  'senthil': 'செந்தில்',
+  'velu': 'வேலு',
+  'vijayan': 'விஜயன்',
+};
+
+// Initial vowels in Tamil
+const TA_INIT_VOWEL: Record<string, string> = {
+  'aa': 'ஆ', 'ai': 'ஐ', 'au': 'ஔ', 'ee': 'ஈ', 'oo': 'ஊ',
+  'a': 'அ', 'i': 'இ', 'u': 'உ', 'e': 'எ', 'o': 'ஒ',
+};
+
+// Dependent vowel signs
+const TA_VOWEL_SIGN: Record<string, string> = {
+  'aa': 'ா', 'ai': 'ை', 'au': 'ௌ', 'ee': 'ீ', 'oo': 'ூ',
+  'a': '', 'i': 'ி', 'u': 'ு', 'e': 'ெ', 'o': 'ொ',
+};
+
+// Consonant mapping
+const TA_CONSONANTS: Record<string, string> = {
+  'sh': 'ஷ', 'th': 'த', 'dh': 'த', 'ch': 'ச', 'zh': 'ழ', 'ng': 'ங',
+  'nj': 'ஞ', 'ph': 'ப', 'kh': 'க', 'gh': 'க', 'bh': 'ப',
+  'k': 'க', 'c': 'க', 'g': 'க', 's': 'ச', 'j': 'ஜ', 't': 'ட',
+  'd': 'ட', 'p': 'ப', 'b': 'ப', 'm': 'ம', 'y': 'ய', 'r': 'ர',
+  'l': 'ல', 'v': 'வ', 'w': 'வ', 'h': 'ஹ', 'n': 'ன',
+};
+
+/** Phonetic transliteration from English Latin letters to Tamil script. */
+function latinWordToTamil(raw: string): string {
+  const lower = raw.toLowerCase().trim();
+  if (!lower) return raw;
+  if (KNOWN_EN_TO_TA[lower]) return KNOWN_EN_TO_TA[lower];
+
+  let out = '';
+  let i = 0;
+  let isStart = true;
+
+  while (i < lower.length) {
+    // Check 2-letter vowel digraph
+    const v2 = lower.slice(i, i + 2);
+    if (isStart && TA_INIT_VOWEL[v2]) {
+      out += TA_INIT_VOWEL[v2];
+      i += 2;
+      isStart = false;
+      continue;
+    }
+    // Check 1-letter vowel at start
+    const v1 = lower[i];
+    if (isStart && TA_INIT_VOWEL[v1]) {
+      out += TA_INIT_VOWEL[v1];
+      i++;
+      isStart = false;
+      continue;
+    }
+
+    // Check consonant digraphs
+    const c2 = lower.slice(i, i + 2);
+    let cons = TA_CONSONANTS[c2];
+    let consLen = 2;
+    if (!cons) {
+      cons = TA_CONSONANTS[lower[i]];
+      consLen = 1;
+    }
+
+    if (cons) {
+      i += consLen;
+      isStart = false;
+      // Special: word-initial 'n' uses 'ந'
+      if (cons === 'ன' && out.length === 0) cons = 'ந';
+
+      // Look ahead for vowel following consonant
+      const nextV2 = lower.slice(i, i + 2);
+      if (TA_VOWEL_SIGN[nextV2] !== undefined) {
+        out += cons + TA_VOWEL_SIGN[nextV2];
+        i += 2;
+      } else if (TA_VOWEL_SIGN[lower[i]] !== undefined) {
+        out += cons + TA_VOWEL_SIGN[lower[i]];
+        i++;
+      } else {
+        // No vowel follows: bare consonant with virama (pulli)
+        out += cons + PULLI;
+      }
+    } else {
+      // Punctuation, digits or unrecognised character: pass through
+      out += lower[i];
+      i++;
+      isStart = false;
+    }
+  }
+
+  return out;
+}
+
+/**
+ * Transliterate/translate English text into Tamil.
+ *
+ * Checks dictionary for known names and official terms (like "Test Petitioner" -> "தேர்வு மனுதாரர்"),
+ * then uses phonetic syllabic transliteration for other words.
+ */
+export function transliterateToTamil(input: unknown): string {
+  const s = String(input ?? '').trim();
+  if (!s) return '';
+  if (hasTamil(s) && !hasLatin(s)) return s;
+
+  // Check whole phrase dictionary match (e.g. "Test Petitioner")
+  const phraseKey = s.toLowerCase();
+  if (KNOWN_EN_TO_TA[phraseKey]) return KNOWN_EN_TO_TA[phraseKey];
+
+  return s
+    .split(/(\s+)/)
+    .map((token) => {
+      if (!hasLatin(token)) return token;
+      const m = token.match(/^([^a-zA-Z]*)([a-zA-Z]+)([^a-zA-Z]*)$/);
+      if (!m) return token;
+      const [, before, core, after] = m;
+      return before + latinWordToTamil(core) + after;
+    })
+    .join('');
+}
+
+/**
+ * Cleanly display a citizen's name in the selected console language.
+ *
+ * When lang is 'ta':
+ * - If already in Tamil, returns as-is.
+ * - If in English, transliterates/translates to Tamil.
+ *
+ * When lang is 'en':
+ * - If in Tamil, transliterates to Latin English.
+ * - If in English, returns as-is.
+ */
+export function displayName(name: unknown, lang: 'en' | 'ta'): string {
+  const s = String(name ?? '').trim();
+  if (!s) return '';
+  if (lang === 'ta') {
+    return hasTamil(s) ? s : transliterateToTamil(s);
+  }
+  return hasTamil(s) ? transliterate(s) : s;
+}
+
+/**
+ * Cleanly display an address in the selected console language.
+ */
+export function displayAddress(address: unknown, lang: 'en' | 'ta'): string {
+  const s = String(address ?? '').trim();
+  if (!s) return '';
+  if (lang === 'ta') {
+    return hasTamil(s) ? s : transliterateToTamil(s);
+  }
+  return hasTamil(s) ? transliterate(s) : s;
 }

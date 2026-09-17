@@ -105,8 +105,17 @@ function isPlaceholderSubject(s: unknown): boolean {
  */
 const PLACEHOLDER_NAMES = new Set([
   'citizen', 'unknown', 'n/a', 'na', '-', '--', 'petitioner',
-  'uploaded document', 'document',
+  'uploaded document', 'document', 'test petitioner',
 ]);
+
+const COMMON_NAME_MAP_TA: Record<string, string> = {
+  'test petitioner': 'தேர்வு மனுதாரர்',
+  'test': 'தேர்வு',
+  'petitioner': 'மனுதாரர்',
+  'citizen': 'குடிமகன்',
+  'applicant': 'விண்ணப்பதாரர்',
+  'unknown': 'தெரியாதவர்',
+};
 
 function isPlaceholderName(s: unknown): boolean {
   const v = String(s ?? '').trim().toLowerCase();
@@ -1006,6 +1015,52 @@ cpRouter.get('/petitions', requirePermission('PETITION_VIEW'), async (req, res) 
           }
         });
       }
+
+      /*
+       * THIRD STAGE: translate citizen names and addresses so the "குடிமக்கள்"
+       * column renders properly in the selected language.
+       */
+      const namePending: number[] = [];
+      const addrPending: number[] = [];
+      rows.forEach((r: any, i: number) => {
+        const name = String(r.citizen_name ?? '').trim();
+        if (name && detectTextLang(name) !== lang) {
+          const lower = name.toLowerCase();
+          if (lang === 'ta' && COMMON_NAME_MAP_TA[lower]) {
+            r.citizen_name_display = COMMON_NAME_MAP_TA[lower];
+          } else {
+            namePending.push(i);
+          }
+        }
+        const addr = String(r.citizen_address ?? '').trim();
+        if (addr && addr.length > 2 && detectTextLang(addr) !== lang) {
+          addrPending.push(i);
+        }
+      });
+
+      if (namePending.length) {
+        const doneNames = await Promise.all(
+          namePending.map((i) => translateText(String((rows[i] as any).citizen_name ?? ''), lang)),
+        );
+        namePending.forEach((rowIndex, k) => {
+          const t = doneNames[k];
+          if (t?.text) {
+            (rows[rowIndex] as any).citizen_name_display = t.text;
+          }
+        });
+      }
+
+      if (addrPending.length) {
+        const doneAddrs = await Promise.all(
+          addrPending.map((i) => translateText(String((rows[i] as any).citizen_address ?? ''), lang)),
+        );
+        addrPending.forEach((rowIndex, k) => {
+          const t = doneAddrs[k];
+          if (t?.text) {
+            (rows[rowIndex] as any).citizen_address_display = t.text;
+          }
+        });
+      }
     } catch {
       // Rendering must never stop the list from loading.
     }
@@ -1094,14 +1149,40 @@ cpRouter.get('/petitions/:id', requirePermission('PETITION_VIEW'), async (req, r
    * knowledge base already bilingual, or are identifiers that must read the
    * same in both languages.
    */
-  const viewLang = (req.query as any).lang === 'ta' ? 'ta'
-    : (req.query as any).lang === 'en' ? 'en' : null;
+  if (viewLang) {
+    if (analysis?.full) {
+      try {
+        await renderAnalysisInLanguage(analysis.full, viewLang);
+      } catch {
+        // A failed translation must never stop the petition from loading.
+      }
+    }
 
-  if (viewLang && analysis?.full) {
-    try {
-      await renderAnalysisInLanguage(analysis.full, viewLang);
-    } catch {
-      // A failed translation must never stop the petition from loading.
+    if (petition.subject && detectTextLang(petition.subject) !== viewLang) {
+      try {
+        const tr = await translateText(petition.subject, viewLang);
+        if (tr?.text) {
+          petition.subject_display = tr.text;
+          petition.subject_translated = tr.machine;
+        }
+      } catch { /* keep original */ }
+    }
+    if (petition.citizen_name && detectTextLang(petition.citizen_name) !== viewLang) {
+      try {
+        const lower = petition.citizen_name.trim().toLowerCase();
+        if (viewLang === 'ta' && COMMON_NAME_MAP_TA[lower]) {
+          petition.citizen_name_display = COMMON_NAME_MAP_TA[lower];
+        } else {
+          const tr = await translateText(petition.citizen_name, viewLang);
+          if (tr?.text) petition.citizen_name_display = tr.text;
+        }
+      } catch { /* keep original */ }
+    }
+    if (petition.citizen_address && detectTextLang(petition.citizen_address) !== viewLang) {
+      try {
+        const tr = await translateText(petition.citizen_address, viewLang);
+        if (tr?.text) petition.citizen_address_display = tr.text;
+      } catch { /* keep original */ }
     }
   }
 
