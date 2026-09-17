@@ -1,0 +1,19 @@
+{
+  "name": "citizen-petition-ai-poc",
+  "private": true,
+  "version": "0.1.0",
+  "description": "AI-Assisted Citizen Petition Processing - Proof of Concept",
+  "workspaces": [
+    "server",
+    "web"
+  ],
+  "scripts": {
+    "dev": "concurrently -n api,web -c green,blue \"npm:dev -w server\" \"npm:dev -w web\"",
+    "build": "npm run build -w server && npm run build -w web",
+    "seed": "npm run seed -w server",
+    "test": "npm test -w server"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}

@@ -1,0 +1,1544 @@
+/*
+ * Noto Sans Tamil, for the console's Tamil text.
+ *
+ * CSS requires @import to precede every rule, so this must stay at the very
+ * top of the file: appended at the end it was silently dropped and the Tamil
+ * text fell back to whatever the system provided.
+ */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Tamil:wght@400;500;600;700&display=swap');
+
+/* Citizen Petition POC - white + green government theme.
+   Scoped under .poc so it cannot collide with the Collector app styles. */
+
+.poc {
+  --g-50:  #f2f9f4;
+  --g-100: #e2f2e6;
+  --g-200: #c3e5cc;
+  --g-500: #1f8a4c;
+  --g-600: #19703d;
+  --g-700: #135830;
+  --ink:   #14231a;
+  --ink-2: #47594e;
+  --ink-3: #6f8278;
+  --line:  #d9e5dd;
+  --line-2:#eaf2ec;
+  --warn:  #8a5a00;
+  --warn-bg:#fff6e5;
+  --err:   #9a2620;
+  --err-bg:#fdecea;
+  --radius: 6px;
+  --shadow: 0 1px 2px rgba(20,35,26,.05), 0 2px 8px rgba(20,35,26,.04);
+
+  /*
+   * Elevation, as a scale rather than ad-hoc values.
+   *
+   * Cards, dialogs and the slide-over panel had each grown their own shadow,
+   * so surfaces at the same conceptual depth looked different. Three levels
+   * cover everything the console shows.
+   */
+  --shadow-1: 0 1px 2px rgba(20,35,26,.06);
+  --shadow-2: 0 2px 8px rgba(20,35,26,.07), 0 1px 2px rgba(20,35,26,.05);
+  --shadow-3: 0 12px 32px rgba(20,35,26,.14), 0 2px 8px rgba(20,35,26,.06);
+
+  min-height: 100vh;
+  background: #fff;
+  color: var(--ink);
+
+  /*
+   * TAMIL NEEDS ITS OWN FONT IN THE STACK.
+   *
+   * Segoe UI carries no Tamil glyphs, so every Tamil string fell through to
+   * whatever the operating system happened to supply - Nirmala UI on one
+   * machine, a fallback serif on another. Line heights and weights then
+   * differed between the two languages, which is why the Tamil console looked
+   * unlike the English one.
+   *
+   * Noto Sans Tamil is already served for the PDF report, so naming it here
+   * costs nothing extra and makes both languages render from a font the
+   * application controls.
+   */
+  font: 14px/1.6 "Segoe UI", "Noto Sans Tamil", "Nirmala UI", system-ui,
+        -apple-system, Roboto, Arial, sans-serif;
+  /* Tamil glyphs carry meaning in small marks; keep them crisp. */
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/*
+ * Tamil sets taller than Latin at the same size, so a line height tuned for
+ * English crowds it. This lifts only the Tamil console, leaving English
+ * exactly as it was.
+ */
+.poc:lang(ta), .poc [lang='ta'] { line-height: 1.75; }
+
+.poc *, .poc *::before, .poc *::after { box-sizing: border-box; }
+.poc h1 { font-size: 21px; margin: 0; font-weight: 650; letter-spacing: -.01em; }
+.poc h2 { font-size: 17px; margin: 0; font-weight: 650; }
+.poc h3 { font-size: 15px; margin: 0; font-weight: 650; }
+.poc h4 { font-size: 12px; margin: 0 0 8px; font-weight: 700; text-transform: uppercase;
+          letter-spacing: .06em; color: var(--g-600); }
+.poc p { margin: 0 0 10px; }
+
+/* ---------------- header ---------------- */
+.poc-header {
+  background: var(--g-600); color: #fff;
+  display: flex; align-items: center; gap: 14px;
+  padding: 0 22px; height: 60px; position: sticky; top: 0; z-index: 40;
+}
+.poc-header .mark {
+  width: 34px; height: 34px; border-radius: 8px; background: rgba(255,255,255,.16);
+  display: grid; place-items: center; font-size: 17px; border: 1px solid rgba(255,255,255,.26);
+}
+.poc-header .title { font-weight: 650; font-size: 15.5px; line-height: 1.2; }
+.poc-header .sub { font-size: 11.5px; opacity: .82; }
+.poc-header .grow { flex: 1; }
+.poc-header .who { text-align: right; font-size: 12px; line-height: 1.35; }
+.poc-header .who b { display: block; font-size: 13px; }
+.poc-header button {
+  background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.3);
+  color: #fff; padding: 6px 13px; border-radius: var(--radius);
+  font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
+}
+.poc-header button:hover { background: rgba(255,255,255,.24); }
+
+/* ---------------- nav ---------------- */
+.poc-nav {
+  background: var(--g-50); border-bottom: 1px solid var(--line);
+  display: flex; gap: 2px; padding: 0 22px; overflow-x: auto;
+}
+.poc-nav button {
+  background: none; border: 0; border-bottom: 3px solid transparent;
+  padding: 12px 16px; font: inherit; font-size: 13.5px; font-weight: 600;
+  color: var(--ink-2); cursor: pointer; white-space: nowrap;
+}
+.poc-nav button:hover { color: var(--g-700); background: var(--g-100); }
+.poc-nav button.on { color: var(--g-700); border-bottom-color: var(--g-500); }
+.poc-nav .live {
+  margin-left: auto; display: flex; align-items: center; gap: 7px;
+  font-size: 12px; color: var(--ink-3); padding: 0 4px;
+}
+.poc-nav .dot { width: 8px; height: 8px; border-radius: 50%; background: #c3ccc7; }
+.poc-nav .dot.on { background: var(--g-500); box-shadow: 0 0 0 3px rgba(31,138,76,.18); }
+
+/* ---------------- layout ---------------- */
+.poc-main { padding: 22px; max-width: 1500px; margin: 0 auto; }
+.poc-head { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 18px; flex-wrap: wrap; }
+.poc-head .grow { flex: 1; }
+.poc-head .lede { color: var(--ink-3); font-size: 13px; margin-top: 3px; }
+
+.poc-grid { display: grid; gap: 16px; }
+.poc-grid.c2 { grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); }
+.poc-grid.c3 { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+.poc-grid.c4 { grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); }
+.poc-split { display: grid; grid-template-columns: minmax(0,1fr) 400px; gap: 16px; align-items: start; }
+@media (max-width: 1150px) { .poc-split { grid-template-columns: 1fr; } }
+
+/* ---------------- card ---------------- */
+.poc-card {
+  background: #fff; border: 1px solid var(--line);
+  border-radius: var(--radius); box-shadow: var(--shadow); margin-bottom: 16px;
+}
+.poc-card > header {
+  padding: 12px 15px; border-bottom: 1px solid var(--line-2);
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  background: var(--g-50); border-radius: var(--radius) var(--radius) 0 0;
+}
+.poc-card > header h3 { flex: 1; color: var(--g-700); }
+.poc-card .body { padding: 15px; }
+.poc-card .body.flush { padding: 0; }
+
+/* ---------------- stat ---------------- */
+.poc-stat {
+  background: #fff; border: 1px solid var(--line); border-left: 3px solid var(--g-500);
+  border-radius: var(--radius); padding: 14px 15px;
+}
+.poc-stat .n { font-size: 27px; font-weight: 650; line-height: 1.1;
+               color: var(--g-700); font-variant-numeric: tabular-nums; }
+.poc-stat .k { font-size: 11.5px; color: var(--ink-3); text-transform: uppercase;
+               letter-spacing: .05em; margin-top: 3px; }
+
+/* ---------------- table ---------------- */
+.poc table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.poc thead th {
+  text-align: left; padding: 10px 13px; background: var(--g-50);
+  border-bottom: 1px solid var(--line); font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .05em; color: var(--g-700); white-space: nowrap;
+}
+.poc tbody td { padding: 11px 13px; border-bottom: 1px solid var(--line-2); vertical-align: top; }
+.poc tbody tr:last-child td { border-bottom: 0; }
+.poc tbody tr.tap { cursor: pointer; }
+.poc tbody tr.tap:hover { background: var(--g-50); }
+.poc tbody tr.fresh { animation: flash 2.4s ease-out; }
+@keyframes flash { from { background: var(--g-100); } to { background: transparent; } }
+
+.poc .mono { font-family: "Cascadia Mono", Consolas, monospace; font-size: 12.5px; }
+.poc .nw { white-space: nowrap; }
+.poc .muted { color: var(--ink-3); }
+.poc .small { font-size: 12.5px; }
+.poc .b { font-weight: 600; }
+.poc .mt { margin-top: 12px; }
+.poc .mb { margin-bottom: 12px; }
+
+/* ---------------- chips ---------------- */
+.poc-chip {
+  display: inline-block; padding: 2px 9px; border-radius: 11px;
+  font-size: 11px; font-weight: 650; white-space: nowrap;
+  background: var(--line-2); color: var(--ink-2); border: 1px solid var(--line);
+}
+.poc-chip.ok   { background: var(--g-100); color: var(--g-700); border-color: var(--g-200); }
+.poc-chip.warn { background: var(--warn-bg); color: var(--warn); border-color: #f0dcb4; }
+.poc-chip.err  { background: var(--err-bg); color: var(--err); border-color: #f2c9c6; }
+.poc-chip.ai   { background: #eef4ff; color: #2a4d8f; border-color: #cfdefa; }
+.poc-chip.demo { background: #f5eefb; color: #66399c; border-color: #e0cdf0; }
+
+/* ---------------- notice ---------------- */
+.poc-note { padding: 11px 13px; border-radius: var(--radius); font-size: 13px; margin-bottom: 12px; }
+.poc-note.info { background: var(--g-50); color: var(--g-700); border: 1px solid var(--g-200); }
+.poc-note.warn { background: var(--warn-bg); color: var(--warn); border: 1px solid #f0dcb4; }
+.poc-note.err  { background: var(--err-bg); color: var(--err); border: 1px solid #f2c9c6; }
+.poc-note.ok   { background: var(--g-100); color: var(--g-700); border: 1px solid var(--g-200); }
+
+/* AI verification banner - deliberately prominent */
+.poc-verify {
+  background: var(--warn-bg); border: 1px solid #f0dcb4; border-left: 4px solid #d19a1a;
+  border-radius: var(--radius); padding: 10px 13px; margin-bottom: 14px;
+  font-size: 12.5px; color: #6b4600;
+}
+.poc-verify b { display: block; font-size: 11px; text-transform: uppercase;
+                letter-spacing: .06em; margin-bottom: 2px; }
+
+/* ---------------- forms ---------------- */
+.poc label { display: block; font-size: 12px; font-weight: 650; color: var(--ink-2); margin-bottom: 5px; }
+.poc input, .poc select, .poc textarea {
+  width: 100%; padding: 9px 11px; border: 1px solid var(--line);
+  border-radius: var(--radius); font: inherit; background: #fff; color: var(--ink);
+}
+.poc input:focus, .poc select:focus, .poc textarea:focus {
+  outline: 2px solid rgba(31,138,76,.22); outline-offset: -1px; border-color: var(--g-500);
+}
+.poc textarea { resize: vertical; min-height: 80px; line-height: 1.6; }
+.poc .fld { margin-bottom: 13px; }
+.poc .cols { display: flex; gap: 11px; flex-wrap: wrap; }
+.poc .cols > * { flex: 1; min-width: 150px; }
+
+/* ---------------- buttons ---------------- */
+.poc button.btn {
+  font: inherit; font-weight: 650; font-size: 13px; padding: 9px 16px;
+  border-radius: var(--radius); border: 1px solid var(--line);
+  background: #fff; color: var(--ink); cursor: pointer;
+}
+.poc button.btn:hover:not(:disabled) { background: var(--g-50); border-color: var(--g-200); }
+.poc button.btn:disabled { opacity: .5; cursor: not-allowed; }
+.poc button.btn.primary { background: var(--g-500); border-color: var(--g-500); color: #fff; }
+.poc button.btn.primary:hover:not(:disabled) { background: var(--g-600); border-color: var(--g-600); }
+.poc button.btn.sm { padding: 5px 11px; font-size: 12px; }
+.poc button.btn.danger { color: var(--err); border-color: #e4b6b3; }
+.poc button.btn.danger:hover:not(:disabled) { background: var(--err-bg); }
+.poc .row { display: flex; gap: 9px; flex-wrap: wrap; align-items: center; }
+
+/* ---------------- document view ---------------- */
+.poc-doc {
+  background: #fbfdfb; border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 15px 17px; font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 12.5px; line-height: 1.7; white-space: pre-wrap; word-break: break-word;
+  max-height: 420px; overflow: auto;
+}
+.poc-preview {
+  border: 1px solid var(--line); border-radius: var(--radius);
+  background: #fbfdfb; overflow: hidden;
+}
+.poc-preview img { width: 100%; display: block; }
+.poc-preview iframe { width: 100%; height: 520px; border: 0; display: block; }
+
+/* ---------------- copilot ---------------- */
+.poc-chat { display: flex; flex-direction: column; gap: 11px; max-height: 440px; overflow-y: auto; padding: 4px; }
+.poc-msg { padding: 10px 13px; border-radius: 10px; font-size: 13px; line-height: 1.6; white-space: pre-wrap; }
+.poc-msg.user { background: var(--g-500); color: #fff; align-self: flex-end; max-width: 82%; border-bottom-right-radius: 3px; }
+.poc-msg.ai { background: var(--g-50); border: 1px solid var(--line); align-self: flex-start; max-width: 94%; border-bottom-left-radius: 3px; }
+.poc-msg .src { margin-top: 7px; padding-top: 7px; border-top: 1px dashed var(--line); font-size: 11.5px; color: var(--ink-3); }
+.poc-suggest { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 11px; }
+.poc-suggest button {
+  background: #fff; border: 1px solid var(--g-200); color: var(--g-700);
+  padding: 5px 11px; border-radius: 14px; font: inherit; font-size: 12px; cursor: pointer;
+}
+.poc-suggest button:hover { background: var(--g-50); }
+
+/* ---------------- misc ---------------- */
+.poc .empty { padding: 30px 18px; text-align: center; color: var(--ink-3); font-size: 13px; }
+.poc .spin { display: inline-block; width: 13px; height: 13px; border: 2px solid var(--g-200);
+             border-top-color: var(--g-500); border-radius: 50%; animation: sp .7s linear infinite; }
+@keyframes sp { to { transform: rotate(360deg); } }
+.poc .kv { display: grid; grid-template-columns: 165px 1fr; gap: 8px 14px; font-size: 13.5px; }
+.poc .kv dt { color: var(--ink-3); font-size: 12px; font-weight: 650; }
+.poc .kv dd { margin: 0; }
+.poc .list { list-style: none; margin: 0; padding: 0; }
+.poc .list li { padding: 8px 0; border-bottom: 1px solid var(--line-2); font-size: 13.5px; }
+.poc .list li:last-child { border-bottom: 0; }
+
+.poc-meter { height: 5px; background: var(--line-2); border-radius: 3px; overflow: hidden; margin-top: 5px; }
+.poc-meter i { display: block; height: 100%; background: var(--g-500); }
+.poc-meter.low i { background: #d19a1a; }
+
+/* ---------------- login ---------------- */
+.poc-login { min-height: 100vh; display: grid; place-items: center; background: var(--g-50); padding: 24px; }
+.poc-login .box {
+  background: #fff; border: 1px solid var(--line); border-radius: 10px;
+  padding: 30px; width: 100%; max-width: 420px; box-shadow: var(--shadow-3);
+}
+.poc-login .brand { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+.poc-login .brand .mark {
+  width: 44px; height: 44px; border-radius: 10px; background: var(--g-500);
+  color: #fff; display: grid; place-items: center; font-size: 21px;
+}
+.poc-login .pick { display: grid; gap: 8px; margin-top: 14px; }
+.poc-login .pick button {
+  text-align: left; background: #fff; border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 11px 13px; font: inherit; cursor: pointer;
+  width: 100%;
+}
+.poc-login .pick button:hover { border-color: var(--g-500); background: var(--g-50); }
+.poc-login .pick .r { font-weight: 650; font-size: 13px; color: var(--g-700); }
+.poc-login .pick .u { font-size: 12px; color: var(--ink-3); }
+
+/* ===================================================== e-Gov Copilot page */
+/*
+ * The Copilot is a full-screen workspace. It reuses .poc-header, .poc-card and
+ * the rest of the console's furniture so it reads as the same application
+ * rather than a bolted-on tool.
+ */
+.poc-fullscreen { min-height: 100vh; background: var(--bg, #f7faf8); }
+.poc-fullscreen .poc-main { padding-top: 22px; }
+
+/* ---- drop zone ---- */
+.drop {
+  border: 2px dashed var(--line);
+  border-radius: var(--radius);
+  background: var(--g-50);
+  padding: 30px 18px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+.drop:hover, .drop.on { border-color: var(--g-500); background: #eaf6ee; }
+.drop .b { color: var(--g-700); margin-bottom: 4px; }
+.drop .small { margin-top: 2px; }
+
+/* ---- pipeline progress ---- */
+.steps { display: flex; flex-wrap: wrap; gap: 10px; }
+.step {
+  display: flex; align-items: center; gap: 7px;
+  padding: 6px 12px; border-radius: 20px;
+  border: 1px solid var(--line); background: #fff;
+  font-size: 13px; color: var(--ink-3);
+}
+.step .dot {
+  width: 9px; height: 9px; border-radius: 50%;
+  background: var(--line); flex: 0 0 auto;
+}
+.step.done { border-color: var(--g-500); color: var(--g-700); }
+.step.done .dot { background: var(--g-500); }
+.step.now {
+  border-color: var(--g-500); background: var(--g-50);
+  color: var(--g-700); font-weight: 600;
+}
+/* The active step pulses so it is obvious work is still in progress. */
+.step.now .dot { background: var(--g-500); animation: stepPulse 1.1s ease-in-out infinite; }
+.step.err { border-color: #c0392b; color: #c0392b; }
+.step.err .dot { background: #c0392b; }
+
+@keyframes stepPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: .45; transform: scale(.8); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .step.now .dot { animation: none; }
+}
+
+/* ---- extracted text ---- */
+.extract {
+  margin: 0; padding: 12px;
+  background: var(--g-50); border: 1px solid var(--line-2);
+  border-radius: var(--radius);
+  font-size: 13px; line-height: 1.6;
+  white-space: pre-wrap; word-break: break-word;
+  max-height: 340px; overflow: auto;
+}
+
+/* Back control on the Copilot header: white on green, so it reads as the way
+   out of a full-screen view rather than another action in the bar. */
+.poc-header .btn.back {
+  background: #fff; color: var(--g-700);
+  border: 1px solid #fff; font-weight: 600;
+  padding: 6px 14px; margin-right: 4px; flex: 0 0 auto;
+}
+.poc-header .btn.back:hover { background: var(--g-50); }
+
+/* ===================================================== language toggle */
+/*
+ * Two pill buttons in the header. Sits on the green bar in the console and on
+ * white at the login screen, so both states are defined explicitly.
+ */
+.lang-toggle {
+  display: inline-flex; gap: 0; flex: 0 0 auto;
+  border: 1px solid rgba(255, 255, 255, .55);
+  border-radius: 20px; overflow: hidden; margin-right: 12px;
+}
+.lang-toggle button {
+  border: 0; background: transparent; cursor: pointer;
+  padding: 5px 13px; font-size: 12.5px; font-weight: 600;
+  color: #fff; transition: background .15s, color .15s;
+}
+.lang-toggle button:hover { background: rgba(255, 255, 255, .18); }
+.lang-toggle button.on { background: #fff; color: var(--g-700); }
+
+/* On a white surface (the login card) the colours invert. */
+.poc-login .lang-toggle { border-color: var(--line); margin-right: 0; }
+.poc-login .lang-toggle button { color: var(--g-700); }
+.poc-login .lang-toggle button:hover { background: var(--g-50); }
+.poc-login .lang-toggle button.on { background: var(--g-600); color: #fff; }
+
+/* Tamil renders taller than Latin; a little extra line height keeps rows even. */
+:root[lang="ta"] body,
+html[lang="ta"] .poc { line-height: 1.6; }
+
+/* ============================================================== footer */
+/*
+ * Sits after the page content and scrolls with it, so it never covers the
+ * table or the analysis. `margin-top: auto` keeps it at the bottom of a short
+ * page without becoming fixed furniture.
+ */
+.poc-footer {
+  margin-top: auto;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  padding: 18px 22px 22px;
+  border-top: 1px solid var(--line-2);
+  background: #fff;
+  font-size: 12.5px; color: var(--ink-3);
+}
+.poc-footer .dev { letter-spacing: .01em; }
+.pixous-logo { height: 26px; width: auto; display: block; }
+
+/* Text mark, used until a real logo file is supplied. */
+.pixous-mark { display: inline-flex; align-items: center; gap: 7px; }
+.pixous-mark .dots {
+  width: 18px; height: 18px; border-radius: 50%;
+  background:
+    radial-gradient(circle at 30% 30%, var(--g-500) 1.6px, transparent 1.7px),
+    radial-gradient(circle at 70% 35%, var(--g-500) 1.4px, transparent 1.5px),
+    radial-gradient(circle at 35% 70%, var(--g-500) 1.4px, transparent 1.5px),
+    radial-gradient(circle at 72% 72%, var(--g-500) 1.2px, transparent 1.3px);
+}
+.pixous-mark .name {
+  display: inline-flex; flex-direction: column; line-height: 1;
+  font-weight: 800; letter-spacing: .04em; color: #1b3a5c; font-size: 14px;
+}
+.pixous-mark .name small {
+  font-size: 7.5px; font-weight: 600; letter-spacing: .16em;
+  color: var(--ink-3); margin-top: 2px;
+}
+
+/* The console and the full-screen pages are column layouts, so the footer
+   settles at the bottom on short pages and after the content on long ones. */
+.poc, .poc-fullscreen { display: flex; flex-direction: column; min-height: 100vh; }
+.poc > .poc-main, .poc-fullscreen > .poc-main { flex: 1 0 auto; }
+
+/* ============================================== e-Gov AI Agent (chat UI) */
+/*
+ * A single centred column on white, as in the reference: welcome heading,
+ * thread, and a rounded composer that grows with its content.
+ */
+.agent {
+  display: flex; flex-direction: column; min-height: 100vh; background: #fff;
+}
+.agent-bar {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 18px; border-bottom: 1px solid var(--line-2); background: #fff;
+}
+.agent-bar .grow { flex: 1; }
+.agent-title { font-weight: 700; color: var(--g-700); font-size: 15px; }
+
+.agent-main {
+  flex: 1 0 auto; width: 100%; max-width: 780px; margin: 0 auto;
+  padding: 0 18px 26px;
+  display: flex; flex-direction: column; justify-content: center;
+}
+/* Once the conversation starts the composer moves to the bottom. */
+.agent-main.started { justify-content: flex-start; padding-top: 22px; }
+
+.agent-welcome { text-align: center; margin: 40px 0 26px; }
+.agent-welcome h1 {
+  font-size: 30px; font-weight: 600; color: #1f2430; margin: 0 0 8px;
+  letter-spacing: -.01em;
+}
+.agent-welcome p { margin: 0; font-size: 14px; }
+
+/* ---- thread ---- */
+.agent-thread { display: flex; flex-direction: column; gap: 18px; margin-bottom: 20px; }
+.msg { display: flex; gap: 10px; animation: msgIn .18s ease-out; }
+.msg.user { justify-content: flex-end; }
+.msg .avatar {
+  width: 28px; height: 28px; border-radius: 50%; flex: 0 0 auto;
+  display: grid; place-items: center; background: var(--g-50);
+  border: 1px solid var(--line); font-size: 14px;
+}
+.msg .bubble {
+  border-radius: 14px; padding: 11px 14px; font-size: 14px; line-height: 1.62;
+  max-width: 100%; overflow-wrap: anywhere;
+}
+.msg.user .bubble { background: var(--g-50); border: 1px solid var(--line-2); max-width: 80%; }
+.msg.agent .bubble { background: #fff; border: 1px solid var(--line-2); flex: 1; }
+.msg .bubble.err { background: #fdf3f2; border-color: #f0c4be; color: #8c2f22; }
+.msg .bubble p { margin: 0 0 8px; }
+.msg .bubble p:last-child { margin-bottom: 0; }
+.msg .file-line { font-weight: 600; margin-bottom: 3px; }
+
+@keyframes msgIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+
+/* ---- thinking ---- */
+.bubble.thinking { display: flex; align-items: center; gap: 9px; color: var(--ink-3); }
+.bubble.thinking .dots { display: inline-flex; gap: 3px; }
+.bubble.thinking .dots i {
+  width: 5px; height: 5px; border-radius: 50%; background: var(--g-500);
+  animation: dot 1.15s ease-in-out infinite;
+}
+.bubble.thinking .dots i:nth-child(2) { animation-delay: .16s; }
+.bubble.thinking .dots i:nth-child(3) { animation-delay: .32s; }
+@keyframes dot { 0%,80%,100% { opacity: .25; transform: scale(.8); } 40% { opacity: 1; transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) {
+  .bubble.thinking .dots i { animation: none; opacity: .7; }
+  .msg { animation: none; }
+}
+
+/* ---- composer ---- */
+.agent-composer {
+  border: 1px solid var(--line); border-radius: 22px;
+  padding: 10px 12px 8px; background: #fff;
+  box-shadow: var(--shadow-1);
+  transition: border-color .15s, box-shadow .15s;
+}
+.agent-composer:focus-within { border-color: var(--g-500); box-shadow: var(--shadow-2); }
+.agent-composer.dragging { border-color: var(--g-500); background: var(--g-50); }
+.agent-composer textarea {
+  width: 100%; border: 0; outline: none; resize: none; background: transparent;
+  font: inherit; font-size: 14.5px; line-height: 1.55; padding: 4px 4px 2px;
+  max-height: 180px;
+}
+.agent-composer textarea::placeholder { color: #9aa8a0; }
+
+.agent-tools { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.agent-tools .grow { flex: 1; }
+.agent-tools .tool {
+  width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--line);
+  background: #fff; cursor: pointer; font-size: 17px; line-height: 1;
+  color: var(--ink-3); display: grid; place-items: center;
+}
+.agent-tools .tool:hover:not(:disabled) { background: var(--g-50); color: var(--g-700); }
+.agent-tools .tool:disabled { opacity: .5; cursor: not-allowed; }
+.agent-tools .tool-label { font-size: 12.5px; color: var(--ink-3); }
+.agent-tools .send {
+  width: 31px; height: 31px; border-radius: 50%; border: 0;
+  background: #d7e2da; color: #fff; font-size: 16px; cursor: not-allowed;
+  display: grid; place-items: center; transition: background .15s;
+}
+.agent-tools .send.on { background: var(--g-600); cursor: pointer; }
+.agent-tools .send.on:hover { background: var(--g-700); }
+
+.agent-attach { margin-bottom: 6px; }
+.chip-file {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--g-50); border: 1px solid var(--line);
+  border-radius: 14px; padding: 5px 10px; font-size: 12.5px;
+}
+.chip-file .x {
+  border: 0; background: transparent; cursor: pointer;
+  font-size: 15px; line-height: 1; color: var(--ink-3); padding: 0 0 0 2px;
+}
+.chip-file .x:hover { color: #c0392b; }
+
+.agent-hint { text-align: center; font-size: 11.5px; color: var(--ink-3); margin: 10px 0 0; }
+
+/* ---- structured analysis reply ---- */
+.analysis-reply section { margin-bottom: 16px; }
+.analysis-reply section:last-of-type { margin-bottom: 10px; }
+.analysis-reply h4 {
+  font-size: 12px; text-transform: uppercase; letter-spacing: .07em;
+  color: var(--g-700); margin: 0 0 7px;
+}
+.analysis-reply dl {
+  display: grid; grid-template-columns: minmax(110px, 30%) 1fr;
+  gap: 5px 12px; margin: 0; font-size: 13.5px;
+}
+.analysis-reply dt { color: var(--ink-3); }
+.analysis-reply dd { margin: 0; }
+.analysis-reply dd em { color: var(--ink-3); font-style: normal; font-size: 12.5px; }
+.analysis-reply ol, .analysis-reply ul { margin: 0; padding-left: 20px; font-size: 13.5px; }
+.analysis-reply li { margin-bottom: 4px; }
+.reply-foot {
+  display: flex; align-items: center; gap: 9px; flex-wrap: wrap;
+  border-top: 1px solid var(--line-2); padding-top: 9px; margin-top: 12px;
+}
+
+/* ---- phone and tablet ---- */
+@media (max-width: 640px) {
+  .agent-main { padding: 0 12px 20px; }
+  .agent-welcome h1 { font-size: 23px; }
+  .msg.user .bubble { max-width: 92%; }
+  .analysis-reply dl { grid-template-columns: 1fr; gap: 2px; }
+  .analysis-reply dt { margin-top: 6px; font-size: 12px; }
+}
+
+/* ===================================================== theme toggle */
+.theme-toggle {
+  width: 42px; height: 24px; flex: 0 0 auto;
+  border: 1px solid var(--line); border-radius: 20px;
+  background: var(--g-50); cursor: pointer; padding: 0;
+  position: relative; transition: background .18s, border-color .18s;
+}
+.theme-toggle .knob {
+  position: absolute; top: 1px; left: 1px;
+  width: 20px; height: 20px; border-radius: 50%;
+  background: #fff; box-shadow: var(--shadow-1);
+  display: grid; place-items: center; font-size: 10px;
+  transition: transform .18s ease;
+}
+.theme-toggle[aria-pressed="true"] { background: #2b3a44; border-color: #3d5060; }
+.theme-toggle[aria-pressed="true"] .knob { transform: translateX(18px); background: #1b2630; }
+@media (prefers-reduced-motion: reduce) { .theme-toggle .knob { transition: none; } }
+
+/* Back button and title mark on the agent bar. */
+.agent-bar .back-btn { font-weight: 600; padding: 6px 14px; border-radius: 8px; }
+.agent-title { display: inline-flex; align-items: center; gap: 7px; }
+.agent-dot {
+  width: 7px; height: 7px; border-radius: 50%; background: var(--g-500);
+  box-shadow: 0 0 0 3px rgba(31,138,76,.15);
+}
+
+/* Closing actions under an analysis reply. */
+.reply-actions {
+  display: flex; gap: 9px; flex-wrap: wrap;
+  margin-top: 14px; padding-top: 12px;
+  border-top: 1px solid var(--line-2);
+}
+
+/* ===================================================== dark theme */
+/*
+ * Redefines the shared tokens, so every component follows without its own
+ * dark rules. Green stays the accent, lightened for contrast on a dark ground.
+ */
+:root[data-theme="dark"] {
+  --g-50:  #17241c;
+  --g-500: #3fb473;
+  --g-600: #49c37e;
+  --g-700: #7ddca8;
+  --ink-3: #9bb0a4;
+  --line:  #2b3a31;
+  --line-2:#223029;
+  --bg:    #111713;
+}
+:root[data-theme="dark"] body { background: #111713; color: #e6eee9; }
+:root[data-theme="dark"] .poc,
+:root[data-theme="dark"] .agent,
+:root[data-theme="dark"] .poc-fullscreen { background: #111713; color: #e6eee9; }
+
+:root[data-theme="dark"] .poc-card,
+:root[data-theme="dark"] .agent-bar,
+:root[data-theme="dark"] .agent-composer,
+:root[data-theme="dark"] .poc-footer,
+:root[data-theme="dark"] .msg.agent .bubble {
+  background: #182220; border-color: #2b3a31; color: #e6eee9;
+}
+:root[data-theme="dark"] .poc-card > header { background: #1b2724; }
+:root[data-theme="dark"] .msg.user .bubble { background: #1e2c26; border-color: #2b3a31; }
+:root[data-theme="dark"] .agent-welcome h1 { color: #eaf3ee; }
+:root[data-theme="dark"] .drop,
+:root[data-theme="dark"] .extract,
+:root[data-theme="dark"] .chip-file { background: #1b2724; border-color: #2b3a31; }
+:root[data-theme="dark"] .agent-composer textarea,
+:root[data-theme="dark"] input,
+:root[data-theme="dark"] textarea,
+:root[data-theme="dark"] select { color: #e6eee9; background: transparent; }
+:root[data-theme="dark"] .agent-tools .tool { background: #1b2724; border-color: #2b3a31; color: #9bb0a4; }
+:root[data-theme="dark"] .agent-tools .send { background: #2b3a31; }
+:root[data-theme="dark"] .agent-tools .send.on { background: var(--g-500); color: #0d1410; }
+:root[data-theme="dark"] .btn { background: #1b2724; border-color: #2b3a31; color: #d8e6de; }
+:root[data-theme="dark"] .btn:hover:not(:disabled) { background: #22302a; }
+:root[data-theme="dark"] .btn.primary { background: var(--g-500); border-color: var(--g-500); color: #0d1410; }
+:root[data-theme="dark"] .poc-chip { background: #1e2c26; border-color: #2b3a31; color: #cfe0d6; }
+:root[data-theme="dark"] table th { background: #1b2724; color: #9bb0a4; }
+:root[data-theme="dark"] table td { border-color: #223029; }
+:root[data-theme="dark"] .muted, :root[data-theme="dark"] .small.muted { color: #9bb0a4; }
+:root[data-theme="dark"] .pixous-mark .name { color: #cfe0d6; }
+:root[data-theme="dark"] .analysis-reply h4 { color: var(--g-700); }
+
+/* ====================================== uploaded document attachment */
+/*
+ * A file strip and the document itself in one card: the officer sees the
+ * attachment without a second heading or an extra click.
+ */
+.attach-list { display: flex; flex-direction: column; gap: 8px; }
+.attach {
+  display: flex; align-items: center; gap: 11px; width: 100%;
+  padding: 10px 12px; text-align: left; cursor: pointer;
+  border: 1px solid var(--line); border-radius: 10px;
+  background: #fff; transition: border-color .15s, background .15s;
+}
+.attach:hover { border-color: var(--g-500); background: var(--g-50); }
+.attach.on { border-color: var(--g-500); background: var(--g-50); box-shadow: inset 3px 0 0 var(--g-500); }
+.attach .ico {
+  width: 34px; height: 34px; flex: 0 0 auto; border-radius: 8px;
+  display: grid; place-items: center; font-size: 16px;
+  background: var(--g-50); border: 1px solid var(--line-2);
+}
+.attach.on .ico { background: #fff; }
+.attach .meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.attach .name {
+  font-weight: 600; font-size: 13.5px; color: var(--g-700);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.attach .sub {
+  font-size: 11.5px; color: var(--ink-3);
+  display: inline-flex; align-items: center; gap: 5px; flex-wrap: wrap;
+}
+.attach .sub .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--line); }
+.attach .sub .dot.ok { background: var(--g-500); }
+.attach .sub .dot.warn { background: #d08700; }
+
+.attach-view { margin-top: 12px; }
+.attach-view .poc-preview { border-radius: 10px; overflow: hidden; border: 1px solid var(--line); }
+
+/* Single attachment: the strip is informational, so it does not look clickable. */
+.attach-list:has(.attach:only-child) .attach { cursor: default; }
+
+:root[data-theme="dark"] .attach { background: #182220; border-color: #2b3a31; }
+:root[data-theme="dark"] .attach:hover,
+:root[data-theme="dark"] .attach.on { background: #1e2c26; }
+:root[data-theme="dark"] .attach .ico { background: #1b2724; border-color: #2b3a31; }
+:root[data-theme="dark"] .attach-view .poc-preview { border-color: #2b3a31; }
+
+/* Paperclip sits quieter than the + until hovered. */
+.agent-tools .tool.ghost { border-color: transparent; background: transparent; font-size: 14px; }
+.agent-tools .tool.ghost:hover:not(:disabled) { background: var(--g-50); border-color: var(--line); }
+:root[data-theme="dark"] .agent-tools .tool.ghost { background: transparent; border-color: transparent; }
+:root[data-theme="dark"] .agent-tools .tool.ghost:hover:not(:disabled) { background: #1e2c26; border-color: #2b3a31; }
+
+/* A slightly softer, rounder composer, closer to the reference. */
+.agent-composer { border-radius: 26px; padding: 12px 14px 9px; }
+.agent-composer textarea { font-size: 15px; }
+
+/* ============================ agent composer + bubbles: corrections */
+/*
+ * The send button was rendering as a pale disc on white at the far edge of a
+ * wide composer, so it read as empty space. It is now always filled and sits
+ * with the other controls.
+ */
+.agent-tools .send {
+  width: 34px; height: 34px; font-size: 17px; font-weight: 700;
+  background: #c3d2c8; color: #fff; border: 0;
+  box-shadow: var(--shadow-1);
+}
+.agent-tools .send.on { background: var(--g-600); color: #fff; }
+.agent-tools .send.on:hover { background: var(--g-700); }
+.agent-tools .send:disabled { opacity: 1; }   /* stays visible, just not active */
+
+/*
+ * An error reply is a short sentence, so the bubble must size to its text.
+ * It was stretching to the full column and reading as a large empty panel.
+ */
+.msg.agent .bubble.err { flex: 0 1 auto; align-self: flex-start; max-width: 100%; }
+.msg.agent .bubble { align-self: flex-start; }
+.msg .bubble > p:only-child { margin: 0; }
+
+/* The agent column should not force full height on a one-line message. */
+.msg.agent { align-items: flex-start; }
+
+/* ==================== agent layout: keep the composer reachable ==== */
+/*
+ * The composer disappeared after a short reply.
+ *
+ * `.agent-main` grew to fit its content but could never shrink (`flex: 1 0
+ * auto`), and the page footer sits below it, so on a tall viewport the
+ * composer was pushed past the fold with nothing to scroll to. An officer who
+ * hit an error then had no way to retry or attach another file - the screen
+ * looked broken.
+ *
+ * The page is now a proper column: the THREAD scrolls, and the composer is
+ * pinned beneath it, always in view.
+ */
+.agent { height: 100vh; overflow: hidden; }
+.agent-main {
+  flex: 1 1 auto;
+  min-height: 0;                 /* lets the thread actually scroll */
+  overflow: hidden;
+  padding-bottom: 12px;
+}
+.agent-main.started {
+  justify-content: flex-start;
+  display: grid;
+  grid-template-rows: 1fr auto auto;   /* thread · composer · hint */
+  gap: 0;
+}
+.agent-main.started .agent-thread {
+  overflow-y: auto;
+  min-height: 0;
+  padding-right: 4px;            /* room for the scrollbar */
+  margin-bottom: 14px;
+}
+
+/* The footer is page furniture, not part of the workspace: it stays put and
+   compact so it never crowds the composer out. */
+.agent > .poc-footer { flex: 0 0 auto; padding: 10px 22px 12px; }
+
+/* On a short screen the welcome block gives way before the composer does. */
+@media (max-height: 620px) {
+  .agent-welcome { margin: 16px 0 14px; }
+  .agent-welcome h1 { font-size: 22px; }
+  .agent-welcome p { display: none; }
+}
+
+/* The wordmark is a single line now: no subtitle to stack beneath it. */
+.pixous-mark .name { flex-direction: row; align-items: center; font-size: 15px; }
+.pixous-mark .name small { display: none; }
+.poc-footer { gap: 8px; }
+
+/* ============================== AI analysis reply: structured layout */
+/*
+ * The reply is the officer's working document, so it reads as a report:
+ * numbered sections, a confidence banner at the top, and clear separation
+ * between a finding and the reasoning behind it.
+ */
+.analysis-reply section { margin-bottom: 20px; }
+.analysis-reply h4 {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 11.5px; text-transform: uppercase; letter-spacing: .08em;
+  color: var(--g-700); margin: 0 0 9px;
+  padding-bottom: 6px; border-bottom: 1px solid var(--line-2);
+}
+.analysis-reply h4 .num {
+  width: 18px; height: 18px; border-radius: 50%; flex: 0 0 auto;
+  background: var(--g-600); color: #fff;
+  display: grid; place-items: center;
+  font-size: 10px; letter-spacing: 0; font-weight: 700;
+}
+.analysis-reply .lead { font-size: 14px; line-height: 1.65; margin: 0; }
+.analysis-reply .why {
+  font-size: 12.5px; color: var(--ink-3); line-height: 1.55;
+  margin: 7px 0 0; padding-left: 10px; border-left: 2px solid var(--line);
+}
+.analysis-reply .callout {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  background: var(--g-50); border: 1px solid var(--line-2);
+  border-radius: 9px; padding: 11px 13px;
+}
+.analysis-reply .callout .big {
+  font-size: 15px; font-weight: 650; color: var(--g-700); flex: 1; min-width: 0;
+}
+.analysis-reply .callout em { font-style: normal; font-weight: 500; color: var(--ink-3); font-size: 13.5px; }
+.analysis-reply .sublabel {
+  font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--ink-3); margin: 10px 0 5px; font-weight: 600;
+}
+.analysis-reply .sublabel.warn { color: #b8860b; }
+.analysis-reply .steps-list { counter-reset: step; list-style: none; padding: 0; margin: 0; }
+.analysis-reply .steps-list li {
+  counter-increment: step; position: relative;
+  padding: 7px 0 7px 30px; font-size: 13.5px; line-height: 1.55;
+  border-bottom: 1px solid var(--line-2);
+}
+.analysis-reply .steps-list li:last-child { border-bottom: 0; }
+.analysis-reply .steps-list li::before {
+  content: counter(step);
+  position: absolute; left: 0; top: 7px;
+  width: 20px; height: 20px; border-radius: 50%;
+  background: #fff; border: 1px solid var(--g-500); color: var(--g-700);
+  display: grid; place-items: center; font-size: 10.5px; font-weight: 700;
+}
+.analysis-reply .tagrow { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+.analysis-reply .tag {
+  font-size: 11.5px; padding: 3px 9px; border-radius: 12px;
+  background: var(--g-50); border: 1px solid var(--line-2); color: var(--g-700);
+}
+.analysis-reply .pri {
+  display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .05em;
+  padding: 2px 9px; border-radius: 11px; border: 1px solid;
+}
+.analysis-reply .pri.high { color: #b02a1a; border-color: #f0c4be; background: #fdf3f2; }
+.analysis-reply .pri.normal { color: var(--g-700); border-color: var(--line); background: var(--g-50); }
+.analysis-reply .pri.low { color: var(--ink-3); border-color: var(--line); background: #fff; }
+
+/* ---- confidence banner ---- */
+.conf-banner {
+  display: flex; align-items: center; gap: 13px; flex-wrap: wrap;
+  border: 1px solid var(--line); border-radius: 11px;
+  padding: 12px 14px; margin-bottom: 20px; background: #fff;
+}
+.conf-banner .grow { flex: 1; }
+.conf-banner .ring {
+  width: 48px; height: 48px; border-radius: 50%; flex: 0 0 auto;
+  display: grid; place-items: center;
+  background: conic-gradient(var(--ring) calc(var(--pct)), var(--line-2) 0);
+}
+.conf-banner .ring span {
+  width: 38px; height: 38px; border-radius: 50%; background: #fff;
+  display: grid; place-items: center; font-size: 11.5px; font-weight: 700;
+  color: var(--g-700);
+}
+.conf-banner .txt { display: flex; flex-direction: column; gap: 2px; }
+.conf-banner .txt b { font-size: 13px; color: var(--g-700); }
+.conf-banner.high   { --ring: var(--g-500); }
+.conf-banner.medium { --ring: #d9a441; }
+.conf-banner.low    { --ring: #c0563f; border-color: #f0c4be; background: #fdf7f5; }
+.conf-banner.low .ring span { color: #b02a1a; }
+
+:root[data-theme="dark"] .analysis-reply .callout,
+:root[data-theme="dark"] .analysis-reply .tag { background: #1b2724; border-color: #2b3a31; }
+:root[data-theme="dark"] .conf-banner { background: #182220; border-color: #2b3a31; }
+:root[data-theme="dark"] .conf-banner .ring span { background: #182220; }
+:root[data-theme="dark"] .analysis-reply .steps-list li::before { background: #182220; }
+
+/* Full company name on one line, the subtitle set smaller and lighter. */
+.pixous-mark .name { flex-direction: row; align-items: baseline; gap: 5px; font-size: 15px; }
+.pixous-mark .name .tech {
+  font-size: 9px; font-weight: 600; letter-spacing: .14em; color: var(--ink-3);
+}
+:root[data-theme="dark"] .pixous-mark .name .tech { color: #9bb0a4; }
+
+/* Upload progress: a quiet bar, no internal stage names. */
+.upload-progress {
+  margin: 20px auto 0; max-width: 320px; height: 5px;
+  background: var(--line-2); border-radius: 3px; overflow: hidden;
+}
+.upload-progress span {
+  display: block; height: 100%; background: var(--g-500);
+  border-radius: 3px; transition: width .5s ease;
+}
+
+/* ===================================== e-Gov Copilot panel (in-dashboard) */
+/*
+ * A slide-over inside the console: the dashboard stays behind it, so an
+ * officer consults the assistant without losing the list or the case they
+ * were reading.
+ */
+.copilot-scrim {
+  position: fixed; inset: 0; z-index: 40;
+  background: rgba(16, 28, 20, .28);
+  animation: fadeIn .16s ease-out;
+}
+.copilot-panel {
+  position: fixed; top: 0; right: 0; bottom: 0; z-index: 41;
+  width: min(480px, 100vw);
+  display: flex; flex-direction: column;
+  background: #fff; border-left: 1px solid var(--line);
+  box-shadow: var(--shadow-3);
+  animation: slideIn .22s cubic-bezier(.22,.8,.3,1);
+}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideIn { from { transform: translateX(28px); opacity: .6; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .copilot-scrim, .copilot-panel { animation: none; }
+}
+
+.copilot-head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 14px; border-bottom: 1px solid var(--line-2);
+  background: var(--g-50);
+}
+.copilot-head .grow { flex: 1; min-width: 0; }
+.copilot-head .mark {
+  width: 32px; height: 32px; border-radius: 9px; flex: 0 0 auto;
+  display: grid; place-items: center; background: #fff;
+  border: 1px solid var(--line); font-size: 16px;
+}
+.copilot-head .ttl { font-weight: 700; color: var(--g-700); font-size: 14px; }
+.copilot-head .sub { font-size: 11px; color: var(--ink-3); }
+.copilot-head .icon {
+  width: 28px; height: 28px; border-radius: 7px; flex: 0 0 auto;
+  border: 1px solid transparent; background: transparent; cursor: pointer;
+  font-size: 13px; color: var(--ink-3);
+}
+.copilot-head .icon:hover { background: #fff; border-color: var(--line); color: var(--g-700); }
+.copilot-head .icon.close:hover { color: #c0392b; }
+
+.copilot-body {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto;
+  padding: 16px 14px; display: flex; flex-direction: column; gap: 12px;
+}
+
+.copilot-welcome { text-align: center; padding: 24px 6px; }
+.copilot-welcome h3 { color: #1f2430; font-size: 17px; margin: 0 0 6px; }
+.copilot-welcome .suggest { display: flex; flex-direction: column; gap: 7px; margin-top: 16px; }
+.copilot-welcome .suggest button {
+  text-align: left; padding: 9px 12px; font-size: 12.5px; cursor: pointer;
+  border: 1px solid var(--line); border-radius: 9px; background: #fff;
+  color: var(--g-700); line-height: 1.45;
+}
+.copilot-welcome .suggest button:hover { background: var(--g-50); border-color: var(--g-500); }
+
+.cmsg { display: flex; }
+.cmsg.user { justify-content: flex-end; }
+.cmsg .bubble {
+  max-width: 88%; border-radius: 13px; padding: 10px 12px;
+  font-size: 13.5px; line-height: 1.6; overflow-wrap: anywhere;
+}
+.cmsg.user .bubble { background: var(--g-50); border: 1px solid var(--line-2); }
+.cmsg.agent .bubble { background: #fff; border: 1px solid var(--line-2); }
+.cmsg .bubble.err { background: #fdf3f2; border-color: #f0c4be; color: #8c2f22; }
+.cmsg .bubble p { margin: 0 0 7px; }
+.cmsg .bubble p:last-child { margin-bottom: 0; }
+.cmsg .file-line { font-weight: 600; margin-bottom: 4px; font-size: 12.5px; }
+
+.cmsg-tools {
+  display: flex; align-items: center; gap: 6px;
+  margin-top: 9px; padding-top: 8px; border-top: 1px solid var(--line-2);
+}
+.cmsg-tools .grow { flex: 1; }
+.cmsg-tools button {
+  width: 26px; height: 26px; border-radius: 6px; cursor: pointer;
+  border: 1px solid var(--line); background: #fff; font-size: 12px; color: var(--ink-3);
+}
+.cmsg-tools button:hover { background: var(--g-50); color: var(--g-700); }
+
+.bubble.thinking { display: flex; align-items: center; gap: 9px; color: var(--ink-3); font-size: 13px; }
+
+.copilot-composer {
+  flex: 0 0 auto; border-top: 1px solid var(--line-2);
+  padding: 10px 12px 12px; background: #fff;
+}
+.copilot-composer textarea {
+  width: 100%; border: 1px solid var(--line); border-radius: 12px;
+  padding: 9px 11px; font: inherit; font-size: 13.5px; line-height: 1.5;
+  resize: none; outline: none; max-height: 140px;
+}
+.copilot-composer textarea:focus { border-color: var(--g-500); }
+.copilot-composer .row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.copilot-composer .row .grow { flex: 1; }
+.copilot-composer .tool {
+  width: 30px; height: 30px; border-radius: 50%; cursor: pointer;
+  border: 1px solid var(--line); background: #fff; font-size: 16px; color: var(--ink-3);
+}
+.copilot-composer .tool:hover:not(:disabled) { background: var(--g-50); color: var(--g-700); }
+.copilot-composer .send {
+  width: 31px; height: 31px; border-radius: 50%; border: 0;
+  background: #c3d2c8; color: #fff; font-size: 16px; cursor: not-allowed;
+}
+.copilot-composer .send.on { background: var(--g-600); cursor: pointer; }
+.copilot-composer .send.on:hover { background: var(--g-700); }
+
+.attach-chip, .ctx-chip {
+  display: inline-flex; align-items: center; gap: 6px; margin-bottom: 7px;
+  background: var(--g-50); border: 1px solid var(--line);
+  border-radius: 13px; padding: 4px 10px; font-size: 12px;
+}
+.attach-chip button {
+  border: 0; background: transparent; cursor: pointer;
+  font-size: 15px; line-height: 1; color: var(--ink-3); padding: 0 0 0 2px;
+}
+.ctx-chip { color: var(--g-700); }
+
+@media (max-width: 560px) {
+  .copilot-panel { width: 100vw; border-left: 0; }
+}
+
+/* ======================================================= AI model settings */
+/*
+ * Sits above the Copilot panel (z 41), so it is reachable while the panel is
+ * open without the panel having to close and lose the officer's thread.
+ */
+.ai-dialog {
+  position: fixed; z-index: 50;
+  top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: min(440px, calc(100vw - 32px));
+  max-height: min(600px, calc(100vh - 48px));
+  display: flex; flex-direction: column;
+  background: #fff; border: 1px solid var(--line); border-radius: 14px;
+  box-shadow: var(--shadow-3);
+}
+.ai-dialog-head {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 14px 16px; border-bottom: 1px solid var(--line-2);
+}
+.ai-dialog-head .ttl { font-weight: 700; color: var(--g-700); font-size: 14.5px; }
+.ai-dialog-head .sub { font-size: 11.5px; color: var(--ink-3); margin-top: 2px; line-height: 1.45; }
+.ai-dialog-head .icon {
+  width: 28px; height: 28px; border-radius: 7px; flex: 0 0 auto;
+  border: 1px solid transparent; background: transparent;
+  cursor: pointer; font-size: 13px; color: var(--ink-3);
+}
+.ai-dialog-head .icon:hover { background: var(--g-50); border-color: var(--line); color: #c0392b; }
+
+.ai-dialog-body {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto;
+  padding: 14px 16px; display: flex; flex-direction: column; gap: 9px;
+}
+
+.ai-current {
+  display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
+  font-size: 12px; color: var(--ink-3);
+  background: var(--g-50); border: 1px solid var(--line-2);
+  border-radius: 9px; padding: 8px 11px;
+}
+.ai-current b { color: var(--g-700); }
+.ai-current .mdl {
+  font-family: ui-monospace, "Cascadia Mono", Menlo, monospace;
+  font-size: 11px; background: #fff; border: 1px solid var(--line);
+  border-radius: 5px; padding: 1px 6px;
+}
+.ai-current .dot {
+  width: 7px; height: 7px; border-radius: 50%; background: #c9ccc9; flex: 0 0 auto;
+}
+.ai-current .dot.on { background: var(--g-600); }
+
+.ai-prov {
+  border: 1px solid var(--line); border-radius: 11px;
+  padding: 10px 12px; cursor: pointer; background: #fff;
+}
+.ai-prov:hover:not(.off) { border-color: var(--g-500); background: var(--g-50); }
+.ai-prov.on { border-color: var(--g-600); background: var(--g-50); box-shadow: inset 0 0 0 1px var(--g-600); }
+/* Unconfigured: visibly unavailable, but its reason stays readable. */
+.ai-prov.off { cursor: not-allowed; background: #fafbfa; }
+.ai-prov.off .row > b { color: var(--ink-3); }
+
+.ai-prov .row { display: flex; align-items: center; gap: 9px; }
+.ai-prov .row .grow { flex: 1; font-size: 13.5px; }
+.ai-prov .radio { color: var(--g-600); font-size: 13px; }
+.ai-prov .test {
+  border: 1px solid var(--line); background: #fff; border-radius: 7px;
+  padding: 3px 11px; font-size: 11.5px; cursor: pointer; color: var(--g-700);
+}
+.ai-prov .test:hover:not(:disabled) { background: var(--g-600); color: #fff; border-color: var(--g-600); }
+.ai-prov .test:disabled { opacity: .55; cursor: default; }
+.ai-prov .tag {
+  font-size: 10.5px; color: var(--ink-3); background: #f1f3f1;
+  border-radius: 5px; padding: 2px 7px; white-space: nowrap;
+}
+.ai-prov .mdl-input {
+  width: 100%; margin-top: 8px; padding: 6px 9px;
+  border: 1px solid var(--line); border-radius: 7px;
+  font-family: ui-monospace, "Cascadia Mono", Menlo, monospace; font-size: 11.5px;
+}
+.ai-prov .mdl-input:focus { outline: none; border-color: var(--g-600); }
+
+.ai-prov .note, .ai-dialog-body > .note {
+  font-size: 11.5px; color: var(--ink-3); margin-top: 7px; line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.ai-prov .note.ok { color: var(--g-700); }
+.ai-prov .note.bad, .ai-dialog-body > .note.bad { color: #8c2f22; }
+
+.ai-keys-note {
+  font-size: 11px; color: var(--ink-3); line-height: 1.55;
+  margin: 4px 0 0; padding-top: 10px; border-top: 1px dashed var(--line);
+}
+
+.ai-dialog-foot {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 8px;
+  padding: 11px 16px; border-top: 1px solid var(--line-2);
+}
+.ai-dialog-foot .grow { flex: 1; }
+.ai-dialog-foot .ok-msg { font-size: 12px; color: var(--g-700); font-weight: 600; }
+.ai-dialog-foot button {
+  border: 1px solid var(--line); background: #fff; border-radius: 8px;
+  padding: 6px 14px; font-size: 12.5px; cursor: pointer; color: var(--g-700);
+}
+.ai-dialog-foot button:hover:not(:disabled) { background: var(--g-50); }
+.ai-dialog-foot button.primary { background: var(--g-600); border-color: var(--g-600); color: #fff; }
+.ai-dialog-foot button.primary:hover:not(:disabled) { background: var(--g-700); }
+.ai-dialog-foot button:disabled { opacity: .55; cursor: default; }
+
+/* The AI model button in the console header. Small and quiet: it is
+   configuration, not part of the daily workflow. */
+.poc-header .ai-btn {
+  border: 1px solid rgba(255, 255, 255, .35);
+  background: rgba(255, 255, 255, .1);
+  color: #fff; border-radius: 8px;
+  padding: 5px 11px; font-size: 12px; cursor: pointer;
+  white-space: nowrap;
+}
+.poc-header .ai-btn:hover { background: rgba(255, 255, 255, .2); }
+
+/* ===================================== Next steps (dynamic case workflow) */
+/*
+ * The steps come from the analysis, so the card must read well at any length:
+ * a two-step sequence and a ten-step one both have to look deliberate. A
+ * connecting rail runs behind the markers to make the order unmistakable.
+ */
+.wf-card .body { padding-top: 6px; }
+
+.wf-steps {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0 0;
+  position: relative;
+}
+/* The rail sits behind the markers and stops at the last one. */
+.wf-steps::before {
+  content: '';
+  position: absolute;
+  left: 13px; top: 18px; bottom: 26px;
+  width: 2px; background: var(--line-2);
+}
+
+.wf-step {
+  position: relative;
+  display: flex; gap: 12px; align-items: flex-start;
+  padding: 0 0 16px 0;
+}
+.wf-step:last-child { padding-bottom: 4px; }
+
+.wf-marker {
+  position: relative; z-index: 1; flex: 0 0 auto;
+  width: 28px; height: 28px; border-radius: 50%;
+  display: grid; place-items: center;
+  font-size: 12px; font-weight: 700;
+  background: #fff; border: 2px solid var(--line);
+  color: var(--ink-3);
+}
+.wf-step.done .wf-marker { background: var(--g-600); border-color: var(--g-600); color: #fff; }
+.wf-step.now  .wf-marker { background: #fff; border-color: var(--g-600); color: var(--g-700); }
+
+/* The current step is the one the officer acts on, so it is the only one
+   given a filled panel. Everything else stays quiet. */
+.wf-step.now .wf-body {
+  background: var(--g-50);
+  border: 1px solid var(--g-500);
+  border-radius: 10px;
+  padding: 9px 12px;
+  margin-top: -4px;
+}
+.wf-body { flex: 1; min-width: 0; padding-top: 3px; }
+
+.wf-text {
+  margin: 0; font-size: 13.5px; line-height: 1.55; color: #1f2430;
+  overflow-wrap: anywhere;
+}
+.wf-step.done .wf-text { color: var(--ink-3); }
+.wf-step.now  .wf-text { font-weight: 600; color: var(--g-700); }
+
+.wf-state {
+  display: inline-block; margin-top: 4px;
+  font-size: 10.5px; letter-spacing: .02em; text-transform: uppercase;
+  color: var(--ink-3);
+}
+.wf-step.done .wf-state { color: var(--g-600); }
+.wf-step.now  .wf-state { color: var(--g-700); font-weight: 700; }
+
+.wf-note {
+  margin: 10px 0 0; padding-top: 10px;
+  border-top: 1px dashed var(--line);
+  font-size: 11.5px; color: var(--ink-3); line-height: 1.5;
+}
+
+@media (max-width: 560px) {
+  .wf-steps::before { left: 12px; }
+  .wf-marker { width: 26px; height: 26px; }
+  .wf-text { font-size: 13px; }
+}
+
+/* ============================== Petition progress (office stage tracker) */
+/*
+ * Sixteen stages is a lot to show at once, so the track WRAPS rather than
+ * scrolling sideways: an officer must be able to see the whole procedure and
+ * where the file sits in it without dragging. Each stage is a pill, and only
+ * the current one is emphasised.
+ */
+.wfs-card .body { padding-top: 10px; }
+
+.wfs-track {
+  list-style: none;
+  display: flex; flex-wrap: wrap; gap: 6px 4px;
+  margin: 0; padding: 0;
+}
+
+.wfs-step {
+  display: flex; align-items: center; gap: 7px;
+  padding: 5px 11px 5px 6px;
+  border: 1px solid var(--line); border-radius: 20px;
+  background: #fff; font-size: 12px; line-height: 1.3;
+  max-width: 100%;
+}
+/* The chevron between pills, drawn only where one follows another on a row. */
+.wfs-step + .wfs-step::before {
+  content: '›';
+  margin-right: 3px; margin-left: -4px;
+  color: var(--line); font-size: 14px;
+}
+
+.wfs-dot {
+  width: 20px; height: 20px; border-radius: 50%; flex: 0 0 auto;
+  display: grid; place-items: center;
+  font-size: 10.5px; font-weight: 700;
+  background: #f1f3f1; color: var(--ink-3);
+}
+.wfs-name { overflow-wrap: anywhere; }
+
+.wfs-step.done { border-color: var(--g-500); background: var(--g-50); }
+.wfs-step.done .wfs-dot { background: var(--g-600); color: #fff; }
+.wfs-step.done .wfs-name { color: var(--g-700); }
+
+.wfs-step.now {
+  border-color: var(--g-600); background: var(--g-600);
+  box-shadow: var(--shadow-2);
+}
+.wfs-step.now .wfs-dot { background: #fff; color: var(--g-700); }
+.wfs-step.now .wfs-name { color: #fff; font-weight: 700; }
+
+.wfs-step.next { color: var(--ink-3); }
+/* A stage that does not occur in every case stays visible but recedes. */
+.wfs-step.optional.next { border-style: dashed; }
+.wfs-opt {
+  font-size: 9.5px; text-transform: uppercase; letter-spacing: .03em;
+  color: var(--ink-3); background: #f6f7f6;
+  border-radius: 4px; padding: 1px 5px; margin-left: 2px;
+}
+.wfs-step.now .wfs-opt { background: rgba(255,255,255,.25); color: #fff; }
+
+.wfs-actions {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line-2);
+}
+.wfs-select {
+  border: 1px solid var(--line); border-radius: 8px;
+  padding: 5px 9px; font: inherit; font-size: 12.5px;
+  background: #fff; color: var(--g-700); max-width: 100%;
+}
+.wfs-select:focus { outline: none; border-color: var(--g-600); }
+
+.wfs-history {
+  list-style: none; margin: 12px 0 0; padding: 10px 0 0;
+  border-top: 1px dashed var(--line);
+  display: flex; flex-direction: column; gap: 7px;
+  font-size: 12px;
+}
+.wfs-history li { line-height: 1.5; }
+.wfs-note {
+  font-size: 11.5px; color: var(--ink-3);
+  margin-top: 2px; padding-left: 10px;
+  border-left: 2px solid var(--line-2);
+}
+
+.wfs-foot {
+  margin: 10px 0 0; padding-top: 10px;
+  border-top: 1px dashed var(--line);
+  font-size: 11px; color: var(--ink-3); line-height: 1.5;
+}
+
+@media (max-width: 560px) {
+  .wfs-step { font-size: 11.5px; padding: 4px 9px 4px 5px; }
+  .wfs-step + .wfs-step::before { display: none; }
+  .wfs-actions > * { width: 100%; }
+}
+
+/* ============================================================
+   HERMES-PATTERN COPILOT UI UPGRADES
+   Source chips, tool badges, confidence tiers, markdown rendering
+   Tamil font stack + mixed-language indicator
+   ============================================================ */
+
+/* Tamil font stack — Noto Sans Tamil renders Brahmic glyphs correctly */
+:lang(ta),
+.poc[lang="ta"],
+.bubble p,
+.bubble .bullet-line {
+  font-family: 'Noto Sans Tamil', 'Latha', 'Vijaya', 'Tamil Sangam MN',
+               'Segoe UI', system-ui, sans-serif;
+}
+
+/* ---- Markdown-lite rendering ---- */
+.bubble .msg-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.bubble .msg-content p {
+  margin: 0 0 4px;
+  line-height: 1.6;
+}
+.bubble .bullet-line {
+  display: flex;
+  gap: 6px;
+  margin: 0 0 3px;
+  align-items: flex-start;
+}
+.bubble .bullet-dot {
+  color: var(--g-600);
+  font-weight: 700;
+  flex-shrink: 0;
+  padding-top: 1px;
+}
+
+/* ---- Hermes tool badges ---- */
+.tool-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 8px;
+  padding-top: 7px;
+  border-top: 1px solid rgba(31, 138, 76, 0.15);
+}
+.tool-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: var(--g-50);
+  border: 1px solid var(--g-200);
+  color: var(--g-700);
+  letter-spacing: .02em;
+}
+
+/* ---- Source chips (Hermes grounding provenance) ---- */
+.source-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+}
+.sources-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--ink-3);
+  margin-right: 2px;
+}
+.src-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10.5px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--ink-2);
+  white-space: nowrap;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Petition source — green tint */
+.src-chip.src-petition {
+  background: var(--g-50);
+  border-color: var(--g-200);
+  color: var(--g-700);
+}
+/* Act/Section source — blue tint */
+.src-chip.src-act,
+.src-chip.src-section {
+  background: #eef3ff;
+  border-color: #c5d4f8;
+  color: #2b4bbd;
+}
+/* Department/Authority source — purple tint */
+.src-chip.src-department,
+.src-chip.src-authority {
+  background: #f6eeff;
+  border-color: #d9c5f8;
+  color: #6a35bd;
+}
+/* Web source — amber tint */
+.src-chip.src-web {
+  background: #fff9ee;
+  border-color: #f0d8a0;
+  color: #8a5a00;
+}
+
+/* ---- Confidence tier badges ---- */
+.poc-chip.ai {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 700;
+}
+/* HIGH confidence — green */
+.poc-chip.ai.conf-high {
+  background: #d4f5e2;
+  color: #135830;
+  border: 1px solid #9de5be;
+}
+/* MEDIUM confidence — amber */
+.poc-chip.ai.conf-medium {
+  background: #fff3d4;
+  color: #7a4f00;
+  border: 1px solid #f0d080;
+}
+/* LOW confidence — orange-red */
+.poc-chip.ai.conf-low {
+  background: #ffede8;
+  color: #a33000;
+  border: 1px solid #f0b09a;
+}
+/* Fallback when tier is unknown */
+.poc-chip.ai:not(.conf-high):not(.conf-medium):not(.conf-low) {
+  background: var(--g-50);
+  color: var(--g-700);
+  border: 1px solid var(--g-200);
+}
+.conf-tier {
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  opacity: .85;
+}
+
+/* ---- Mixed-language badge ---- */
+.mixed-lang-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: var(--ink-3);
+  background: #f8f9fa;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 1px 7px;
+  margin-bottom: 5px;
+  font-style: italic;
+}
+
+
+/* ===================================== Responsive header and dense screens */
+/*
+ * The header was a single 60px row with no breakpoint, so on a phone the
+ * portal title, the language toggle, the model button and the officer's name
+ * competed for one line and overlapped. It now wraps to two rows and drops the
+ * decorative subtitle, keeping every CONTROL reachable - which is what matters
+ * on a small screen.
+ */
+@media (max-width: 860px) {
+  .poc-header {
+    height: auto;
+    flex-wrap: wrap;
+    gap: 8px 10px;
+    padding: 10px 14px;
+  }
+  /* The strapline is decoration; the controls are not. */
+  .poc-header .sub { display: none; }
+  .poc-header .title { font-size: 14.5px; }
+  /* Push the identity block and its actions onto their own row. */
+  .poc-header .who { order: 3; text-align: left; flex: 1 1 auto; }
+  .poc-header .ai-btn,
+  .poc-header > button { order: 4; }
+}
+
+@media (max-width: 560px) {
+  .poc-header .mark { width: 30px; height: 30px; font-size: 15px; }
+  .poc-header .who b { font-size: 12.5px; }
+  .poc-header button,
+  .poc-header .ai-btn { padding: 5px 10px; font-size: 12px; }
+
+  /*
+   * Tables do not fit a phone. Rather than shrink the text to unreadability,
+   * the petition list scrolls sideways within its card, so every column keeps
+   * its full width and the page itself never scrolls horizontally.
+   */
+  .poc-card table { min-width: 560px; }
+  .poc-card .body:has(table) { overflow-x: auto; }
+}
