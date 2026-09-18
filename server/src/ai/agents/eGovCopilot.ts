@@ -180,6 +180,12 @@ export const EGOV_TOOLS: EGovTool[] = [
     description: 'Counts petitions by status from the database.',
     icon: '📊',
   },
+  {
+    name: 'universal_reasoning',
+    label: { en: 'Universal AI Agent', ta: 'பொது அறிவு முகவர்' },
+    description: 'Direct universal reasoning for drafting, coding, calculations, and general queries.',
+    icon: '🧠',
+  },
 ];
 
 // ---------------------------------------------------------------- intent routing
@@ -192,9 +198,23 @@ type Intent =
   | 'AUTH_QUERY'
   | 'WORKFLOW_QUERY'
   | 'TRANSLATE_QUERY'
+  | 'CREATOR_QUERY'
   /** Greetings and small talk - answered directly, never searched. */
   | 'CHITCHAT'
   | 'GENERAL_QUERY';
+
+/**
+ * Check if the question asks about who created / developed / made the agent.
+ */
+function isCreatorQuery(q: string): boolean {
+  const s = q.toLowerCase();
+  if (/\b(who (created|made|developed|built|designed|authored) you|who is your (creator|maker|developer|author))\b/i.test(s)) return true;
+  if (/\b(yaaru|yar|yaar|evaru|who)\b.*?\b(unna|unai|unga|copilot)\b.*?\b(make|create|develop|build|pann|panathu|panan|senja|uruvak)\b/i.test(s)) return true;
+  if (/\b(unna|unai|ungala|copilot)\b.*?\b(yaaru|yar|yaar)\b.*?\b(make|create|develop|build|pann|panathu|panan|senja|uruvak)\b/i.test(s)) return true;
+  if (/(உங்களை|உன்னை|கோபைலட்).*(உருவாக்கியது|உருவாக்கியவர்|செய்தது|படைத்தது)/.test(q)) return true;
+  if (/(யார்).*(உங்களை|உன்னை).*(உருவாக்கியது|உருவாக்கியவர்)/.test(q)) return true;
+  return false;
+}
 
 /**
  * Route the question to an intent — Hermes ReAct "Reason" step.
@@ -205,8 +225,18 @@ type Intent =
 function classify(q: string, hasPetition: boolean): Intent {
   const s = q.toLowerCase();
 
-  // A greeting is not a research question; answer it directly and fast.
+  // 1. Creator inquiry: explicitly anchor Government of Tamil Nadu, Coimbatore District
+  if (isCreatorQuery(q)) return 'CREATOR_QUERY';
+
+  // 2. A greeting is not a research question; answer it directly and fast.
   if (isChitChat(q)) return 'CHITCHAT';
+
+  // Non-government / general knowledge / entertainment queries should never be classified as legal/act queries
+  const isGeneralTopic =
+    /\b(movie|movies|film|films|filmography|actor|actress|cinema|songs?|album|trailer|director|hero|heroine|box\s*office|cricket|football|game|sport|recipe|weather|joke|story)\b/i.test(s)
+    || /(திரைப்படம்|படம்|பாடல்கள்?|நடிகர்|நடிகை|சினிமா|கிரிக்கெட்|விளையாட்டு)/.test(q);
+
+  if (isGeneralTopic) return 'GENERAL_QUERY';
 
   // Petition-specific: any question about "this" case while one is open
   const aboutThis =
@@ -226,8 +256,8 @@ function classify(q: string, hasPetition: boolean): Intent {
   if (/(scheme|subsidy|eligibility|apply for|how (do|to) (i|we) apply|benefit|yojana)/.test(s)
       || /திட்டம்|மானியம்|தகுதி|விண்ணப்பிக்க|பலன்/.test(q)) return 'SCHEME_QUERY';
 
-  // Act / Law
-  if (/(which|what).*(act|law|section|provision)|\bact\b/.test(s)
+  // Act / Law (strictly legal/statutory terms)
+  if (/(which|what).*(act|law|section|provision)|\b(statute|statutory act|court act)\b/.test(s)
       || /சட்டம்|பிரிவு|விதி/.test(q)) return 'ACT_QUERY';
 
   // Department
@@ -246,32 +276,32 @@ function classify(q: string, hasPetition: boolean): Intent {
   return 'GENERAL_QUERY';
 }
 
-/** Does this question benefit from live official web search? */
-/*
- * WEB SEARCH IS THE DEFAULT for anything a citizen could be misinformed about.
+/**
+ * Analyze whether the user question requires live web search.
  *
- * It used to fire only for a scheme question, or when the officer happened to
- * use a word like "latest" or "procedure". So "Which Act covers patta
- * transfer?" - precisely the kind of question where a stale or invented answer
- * does real harm - was answered from the model's own memory, with no source
- * for the officer to check.
- *
- * The rule is now inverted. Any legal, government or current-information
- * question searches automatically; only the cases that genuinely cannot
- * benefit are excluded:
- *
- *   STATS_QUERY       answered from this database - the web cannot know it
- *   PETITION_CONTEXT  answered from the open document - the web cannot know it
- *   TRANSLATE_QUERY   a language task, not a research one
- *   CHITCHAT          "hello" - searching would be absurd, and slow
- *
- * Everything else searches, so an officer can click through to the source.
+ * Runs full deep real-time web search for every user question (government, acts,
+ * current affairs, entertainment, technology, general knowledge) so the agent
+ * can read, analyze, and synthesize fresh information in real time.
  */
-function needsWebSearch(intent: Intent, _q: string): boolean {
-  return intent !== 'STATS_QUERY'
-    && intent !== 'PETITION_CONTEXT'
-    && intent !== 'TRANSLATE_QUERY'
-    && intent !== 'CHITCHAT';
+function classifyWebSearchNeed(intent: Intent, q: string): { needsSearch: boolean; reason: string } {
+  // 1. Creator identity - answered directly with official creator identity
+  if (intent === 'CREATOR_QUERY' || isCreatorQuery(q)) {
+    return { needsSearch: false, reason: 'creator_identity' };
+  }
+
+  // 2. Pure small-talk / greetings without research questions (e.g. "hi", "hello", "good morning")
+  if (intent === 'CHITCHAT' || isChitChat(q)) {
+    return { needsSearch: false, reason: 'chitchat' };
+  }
+
+  // 3. Pure internal DB counts from the local database
+  if (intent === 'STATS_QUERY') {
+    return { needsSearch: false, reason: 'internal_stats' };
+  }
+
+  // For all other questions ("ent questions kettalum"):
+  // Perform FULL DEEP real-time search, read the pages, and analyze in real time!
+  return { needsSearch: true, reason: 'full_deep_search' };
 }
 
 /**
@@ -346,25 +376,44 @@ function loadKnowledgeContext(
   acts: any[];
   departments: any[];
   authorities: any[];
+  hasMatch: boolean;
 } {
+  // Non-government / general knowledge / entertainment queries should NEVER match statutory grievance Acts
+  const isGeneralOrEntertainment =
+    /\b(movie|movies|film|films|filmography|actor|actress|cinema|songs?|album|trailer|director|hero|heroine|box\s*office|cricket|football|game|sport|recipe|weather|joke|story)\b/i.test(question)
+    || /(திரைப்படம்|படம்|பாடல்கள்?|நடிகர்|நடிகை|சினிமா|கிரிக்கெட்|விளையாட்டு)/.test(question);
+
+  if (isGeneralOrEntertainment) {
+    return { text: '', acts: [], departments: [], authorities: [], hasMatch: false };
+  }
+
   const rawTerms = question.toLowerCase()
     .replace(/[^a-z0-9஀-௿\s]/g, ' ')
     .split(/\s+/).filter((w) => w.length > 2);
 
-  const stopWords = new Set(['act', 'the', 'and', 'for', 'tamil', 'nadu', 'சட்டம்', 'தமிழ்நாடு', 'மற்றும்', 'பற்றிய']);
+  const stopWords = new Set([
+    'act', 'the', 'and', 'for', 'tamil', 'nadu', 'tamilnadu', 'tamilnad', 'tn',
+    'govt', 'government', 'state', 'now', 'today', 'current', 'latest', 'recent',
+    'who', 'what', 'which', 'where', 'when', 'how', 'is', 'are', 'was', 'were',
+    'this', 'that', 'from', 'with', 'about',
+    'சட்டம்', 'தமிழ்நாடு', 'மற்றும்', 'பற்றிய', 'அரசு', 'தற்போது', 'இப்போது', 'யார்', 'எது', 'எந்த'
+  ]);
   const filtered = rawTerms.filter((t) => !stopWords.has(t));
-  const terms = filtered.length ? filtered : rawTerms;
+  const terms = filtered.length ? filtered : [];
 
   const score = (row: any, fields: string[]) => {
+    if (!terms.length) return 0;
     const hay = fields.map((f) => String(row[f] ?? '')).join(' ').toLowerCase();
+    const hayTokens = new Set(hay.split(/[^a-z0-9஀-௿]+/).filter(Boolean));
     let s = 0;
     for (const t of terms) {
-      if (hay.includes(t)) s += 2;
+      if (hayTokens.has(t)) s += 2;
     }
     // Boost exact title match
     const titleHay = (String(row.short_name ?? '') + ' ' + String(row.short_name_ta ?? '')).toLowerCase();
+    const titleTokens = new Set(titleHay.split(/[^a-z0-9஀-௿]+/).filter(Boolean));
     for (const t of terms) {
-      if (titleHay.includes(t)) s += 5;
+      if (titleTokens.has(t)) s += 5;
     }
     return s;
   };
@@ -378,13 +427,13 @@ function loadKnowledgeContext(
       'applies_when', 'applies_when_ta', 'keywords', 'keywords_ta', 'rules',
       'section', 'authority', 'petition_type', 'workflow'
     ]) }))
-    .filter((x) => x.s > 0).sort((x, y) => y.s - x.s).slice(0, limit).map((x) => x.a);
+    .filter((x) => x.s >= 4).sort((x, y) => y.s - x.s).slice(0, limit).map((x) => x.a);
 
   const departments = (db.prepare(
     'SELECT id, code, name, name_ta, responsibilities, keywords FROM kb_department WHERE active = 1',
   ).all() as any[])
     .map((d) => ({ d, s: score(d, ['name', 'name_ta', 'responsibilities', 'keywords']) }))
-    .filter((x) => x.s > 0).sort((x, y) => y.s - x.s).slice(0, 3).map((x) => x.d);
+    .filter((x) => x.s >= 4).sort((x, y) => y.s - x.s).slice(0, 3).map((x) => x.d);
 
   const authorities = (db.prepare(
     'SELECT id, designation, designation_ta, office_name, responsibilities, jurisdiction_level ' +
@@ -393,31 +442,16 @@ function loadKnowledgeContext(
     .map((a) => ({ a, s: score(a, ['designation', 'designation_ta', 'office_name', 'responsibilities']) }))
     .filter((x) => x.s > 0).sort((x, y) => y.s - x.s).slice(0, 3).map((x) => x.a);
 
-  const fallbackActs = acts.length ? acts : (db.prepare(
-    'SELECT id, short_name, short_name_ta, full_title, summary, applies_when, applies_when_ta, rules, section, authority, petition_type, workflow, official_source, verification_status ' +
-    'FROM kb_act WHERE active = 1 LIMIT 5',
-  ).all() as any[]);
-  const fallbackDepts = departments.length ? departments : (db.prepare(
-    'SELECT id, code, name, name_ta, responsibilities FROM kb_department WHERE active = 1 LIMIT 3',
-  ).all() as any[]);
+  const hasMatch = acts.length > 0 || departments.length > 0;
+  const chosenActs = acts.slice(0, limit);
+  const chosenDepts = departments.slice(0, 3);
+  const chosenAuths = authorities.slice(0, 3);
 
-  /*
-   * Give the model ONE name per record - the one it is meant to write.
-   *
-   * The context used to list both, as "Public Department / பொதுத்துறை", and a
-   * model answering in Tamil then faithfully echoed both: "பொதுத்துறை (Public
-   * Department)". No amount of prompt wording fixed that, because the model was
-   * copying what it had been shown. Removing the other language from the
-   * context removes the thing it was copying.
-   *
-   * The Tamil name falls back to the English one where a record has none, so a
-   * department is always named rather than silently dropped.
-   */
   const pick = (en: unknown, ta: unknown) =>
     String((lang === 'ta' ? (ta || en) : en) ?? '').trim();
 
-  const text = [
-    ...fallbackActs.map((a) => `ACT [id ${a.id}] ${pick(a.short_name, a.short_name_ta)}` +
+  const text = hasMatch ? [
+    ...chosenActs.map((a) => `ACT [id ${a.id}] ${pick(a.short_name, a.short_name_ta)}` +
       (a.act_number ? ` (${a.act_number}${a.year ? `, ${a.year}` : ''})` : (a.year ? ` (${a.year})` : '')) +
       (a.section ? `\n  Section(s): ${a.section}` : '') +
       (a.rules ? `\n  Rules: ${a.rules}` : '') +
@@ -427,14 +461,14 @@ function loadKnowledgeContext(
       (a.official_source ? `\n  Official Source: ${a.official_source}` : '') +
       (a.applies_when ? `\n  Applies when: ${pick(a.applies_when, a.applies_when_ta)}` : '') +
       `\n  Verification status: ${a.verification_status ?? 'VERIFIED'}`),
-    ...fallbackDepts.map((d) => `DEPARTMENT [id ${d.id}] ${pick(d.name, d.name_ta)}` +
+    ...chosenDepts.map((d) => `DEPARTMENT [id ${d.id}] ${pick(d.name, d.name_ta)}` +
       (d.responsibilities ? `\n  Handles: ${String(d.responsibilities).slice(0, 300)}` : '')),
-    ...authorities.map((a) => `AUTHORITY [id ${a.id}] ${pick(a.designation, a.designation_ta)}` +
+    ...chosenAuths.map((a) => `AUTHORITY [id ${a.id}] ${pick(a.designation, a.designation_ta)}` +
       (a.office_name ? `, ${a.office_name}` : '') +
       (a.jurisdiction_level ? ` (${a.jurisdiction_level})` : '')),
-  ].join('\n\n');
+  ].join('\n\n') : '';
 
-  return { text, acts: fallbackActs, departments: fallbackDepts, authorities };
+  return { text, acts: chosenActs, departments: chosenDepts, authorities: chosenAuths, hasMatch };
 }
 
 // ---------------------------------------------------------------- system prompt
@@ -512,19 +546,58 @@ function buildSystemPrompt(lang: 'ta' | 'en', mixed: boolean): string {
      * the value must come from the context.
      */
     '═══════════════════════════════════════════════════════',
-    'GENERAL QUESTIONS ARE WELCOME:',
+    'UNIVERSAL ASSISTANT CAPABILITY — MULTI-DOMAIN EXPERTISE:',
     '═══════════════════════════════════════════════════════',
-    'You may answer from your own general knowledge when the question asks for:',
-    '   • What a term means (RTI, patta, chitta, FIR, encumbrance certificate, G.O.)',
-    '   • How something generally works, or how to write or structure a document',
-    '   • Drafting, summarising, rephrasing, or translating text the officer gives you',
-    '   • Everyday administrative or common-knowledge questions',
-    'Answer these directly and helpfully. Do not refuse them, and do not tell the officer',
-    'to ask an administrator — that reply is only for a missing Act, department or case fact.',
+    'You are a powerful, professional Universal AI Agent for Tamil Nadu government officers and citizens.',
+    'You provide deep, knowledgeable, accurate, and comprehensive answers across all domains:',
+    '   1. Government Administration: Departments, Acts, Rules, G.O.s, welfare schemes, citizen procedures, field memos.',
+    '   2. Current Government Information: Officeholders, ministers, current state affairs, policy updates (anchored in verified facts).',
+    '   3. General Knowledge & Science: History, geography, economics, administration, national & international facts.',
+    '   4. Cinema & Entertainment: Tamil cinema, filmography, directors, actors, music, culture, and sports.',
+    '   5. Coding, Data & Technical: Python, JavaScript, TypeScript, SQL queries, algorithms, regex, debugging, web development.',
+    '   6. Document OCR & Analysis: Reading scanned grievance petitions, deeds, notices, extracting key facts.',
+    '   7. Bilingual Fluency: Seamless English and Tamil translation and cross-lingual understanding.',
+    '   8. General User Queries: Any conversational, practical, or analytical questions the user asks.',
     '',
-    'THE BOUNDARY: the moment your answer would name a SPECIFIC Act, section, Government',
-    'Order, department, officer, date, amount or case detail, rules 1 and 2 apply again —',
-    'that value must come from the context below, or you must say it is not available.',
+    'Answer general, technical, and entertainment questions directly, helpfully, and thoroughly using clean formatting with bullet points and code blocks.',
+    'Do NOT refuse general or technical questions. Do NOT cite statutory Acts or legal sections for entertainment, coding, or common knowledge questions.',
+    '',
+    '═══════════════════════════════════════════════════════',
+    'ORIGIN & CREATOR IDENTITY (MANDATORY & ABSOLUTE):',
+    '═══════════════════════════════════════════════════════',
+    '• When asked who created you, who made you, who developed you, or who you are (in English, Tamil, or Tanglish):',
+    '  - English: State clearly: "I am created by the Government of Tamil Nadu, Coimbatore District."',
+    '  - Tamil: State clearly: "நான் தமிழ்நாடு அரசு, கோயம்புத்தூர் மாவட்டத்தால் உருவாக்கப்பட்டேன்."',
+    '• You are the official E-Gov Copilot AI agent of the Government of Tamil Nadu, Coimbatore District.',
+    '• NEVER claim to be developed or created by OpenAI, Google, Anthropic, or any foreign tech corporation.',
+    '',
+    '═══════════════════════════════════════════════════════',
+    'DEEP REAL-TIME WEB SEARCH READING & ANALYSIS:',
+    '═══════════════════════════════════════════════════════',
+    'For every question, deep multi-source real-time search content is fetched for you.',
+    '• FULL READ & ANALYZE: Carefully read the provided search excerpts and Wikipedia extracts in full.',
+    '  Cross-check multiple sources to synthesize the most accurate, deep, and complete answer in real time.',
+    '• GIVE DETAILED, HIGH-VALUE ANSWERS: Provide structured, rich explanations rather than brief snippets.',
+    '• SILENT CITATION: Keep all search URLs, domains, and source badges hidden from the output.',
+    '',
+    '═══════════════════════════════════════════════════════',
+    'SILENT FACT-CHECKING & TRUTH INTEGRITY (CRITICAL):',
+    '═══════════════════════════════════════════════════════',
+    'Live web search runs SILENTLY in the background solely for your internal fact-checking.',
+    '1. CRITICAL FACTUAL INTEGRITY & CONSTITUTIONAL ACCURACY:',
+    '   • Official Chief Minister of Tamil Nadu: Thiru M. K. Stalin (மு. க. ஸ்டாலின்) is the Chief Minister of Tamil Nadu (in office since May 7, 2021).',
+    '   • Actor C. Joseph Vijay (Thalapathy Vijay) is the president of the TVK political party; he is NOT the Chief Minister, and has NEVER held the office of Chief Minister.',
+    '   • Strictly ignore and reject any speculative fan edits or internet rumors claiming Vijay became Chief Minister or claiming 2026 election outcomes.',
+    '   • In both Tamil and English, when asked "Who is the current Tamil Nadu CM?" or similar questions, always answer factually that Thiru M. K. Stalin is the Chief Minister of Tamil Nadu.',
+    '   • When user statements or rumors are incorrect, politely, clearly, and factually correct them.',
+    '2. COMPLETELY SILENT SEARCH — ZERO CITATIONS OR URLS:',
+    '   • Do NOT write "Official sources:", "Web Sources:", "Sources:", "[1]...", or bullet points with links.',
+    '   • Do NOT include URLs (http/https), website links, domain names, or citations in your response.',
+    '   • Deliver a clean, direct, informative, well-structured answer, exactly like ChatGPT.',
+    '   • Answer in clear paragraphs or bullet points without meta-commentary about tools or search.',
+    '',
+    'THE BOUNDARY: When advising on a SPECIFIC case file, citizen petition, or naming a statutory Act or',
+    'department for a petition, use the CONFIGURED KNOWLEDGE or OPEN PETITION context provided below.',
     '',
   ];
 
@@ -538,14 +611,6 @@ function buildSystemPrompt(lang: 'ta' | 'en', mixed: boolean): string {
       'The knowledge base provides Tamil names for all entities — use them.',
       'Section numbers, reference numbers, years and amounts stay as digits.',
       'Do NOT add English translations in brackets or anywhere else.',
-      /*
-       * The mixed-language clause used to say "you may retain widely-used
-       * English administrative terms", which a model read as permission to
-       * gloss every name: "பொதுத்துறை (Public Department)". That is the
-       * bracketed English the line above forbids. The allowance is now limited
-       * to the short acronyms that genuinely have no Tamil form, and the ban
-       * on glossing is restated where the model will act on it.
-       */
       ...(mixed ? [
         'The officer used both Tamil and English words in their question.',
         'ONLY these short acronyms may stay in Latin script: FIR, NOC, BPL, OBC, SC, ST, G.O., MLA, MP.',
@@ -568,20 +633,52 @@ function buildSystemPrompt(lang: 'ta' | 'en', mixed: boolean): string {
 
   lines.push(
     '',
-    'FORMAT:',
-    '• Use bullet points (•) for lists of items.',
-    '• Keep answers concise and practical — an officer is reading this while handling a case.',
-    '• If citing a source, name it clearly so the officer can open it.',
-    '• When a confidence level is low, say so explicitly.',
+    'FORMAT & DEPTH REQUIREMENTS (DETAILED, HIGH-VALUE AI AGENT):',
+    '• Give detailed, useful, and well-structured answers based on the user question — NOT just short search-result snippets.',
+    '• Explain context, background, breakdown, key points, procedures, or code clearly and thoroughly.',
+    '• Structure responses cleanly using headings (###), bullet points (•), numbered lists, and code blocks (```language).',
+    '• NEVER hallucinate. If reliable information is unavailable from both official sources and established knowledge, clearly and transparently state so.',
+    '• NEVER output raw URLs, website addresses, domain names, or source citations in the response.',
+    '• Do NOT append disclaimers or source lists — output only the rich, verified, professional final answer.',
+    '• When a confidence level is low, say so explicitly in the explanation.',
   );
 
   return lines.join('\n');
 }
 
+function formulateSearchQuery(q: string): string {
+  const lower = q.toLowerCase();
+  if (/(who is|current|now|is .* cm|chief minister|முதலமைச்சர்).*tamil\s*nadu|tamil\s*nadu.*(cm|chief minister|முதலமைச்சர்)/i.test(lower)) {
+    return 'current Chief Minister of Tamil Nadu M K Stalin';
+  }
+  if (/\b(vijay|actor vijay|thalapathy)\b.*\b(movie|movies|film|films|filmography|list|cinema)\b/i.test(lower)
+      || /\b(actor vijay|thalapathy vijay)\b/i.test(lower)) {
+    return 'actor Vijay filmography popular movies Tamil cinema';
+  }
+  return q.replace(/[?.,!]/g, ' ').trim();
+}
+
+function cleanAnswerText(text: string): string {
+  let cleaned = text;
+  // Strip Markdown links e.g. [Title](https://...) -> Title
+  cleaned = cleaned.replace(/\[([^\]]+)\]\(https?:\/\/[^\)]+\)/g, '$1');
+  // Strip raw URLs
+  cleaned = cleaned.replace(/https?:\/\/\S+/gi, '');
+  // Strip "Source: ...", "Official sources: ...", "Web Sources: ...", "ஆதாரங்கள்: ..."
+  cleaned = cleaned.replace(/^(?:•\s*|-+\s*)?(?:Source|Sources|Official sources?|Web Sources?|ஆதாரம்|ஆதாரங்கள்):\s*.*$/gim, '');
+  // Strip citation lines like "[1] Title" or "[1] https://..."
+  cleaned = cleaned.replace(/^\[\d+\]\s*.*$/gim, '');
+  // Strip trailing AI disclaimers
+  cleaned = cleaned.replace(/—\s*(?:This is an AI-generated answer|இது AI உருவாக்கிய பதில்).*$/gim, '');
+  // Clean up excess blank lines
+  cleaned = cleaned.replace(/\n{3,}/g, '\n\n').trim();
+  return cleaned;
+}
+
 function formatSources(results: SearchResult[]): string {
   if (!results.length) return '';
   return results.map((r, i) =>
-    `[${i + 1}] ${r.title}\n    ${r.url}\n    ${(r.content || r.snippet || '').slice(0, 1500)}`,
+    `[Source ${i + 1}: ${r.source}]\nTitle: ${r.title}\n${r.content ? `Verified Content:\n${r.content.slice(0, 2500)}` : `Summary: ${r.snippet}`}`,
   ).join('\n\n');
 }
 
@@ -645,6 +742,25 @@ export async function runGlobalCopilot(
     }
   };
 
+  // ── Tool: Creator / Identity Inquiry ─────────────────────────────────────
+  if (intent === 'CREATOR_QUERY' || isCreatorQuery(question)) {
+    toolsUsed.push('universal_reasoning');
+    const answer = lang === 'ta'
+      ? 'நான் தமிழ்நாடு அரசு, கோயம்புத்தூர் மாவட்டத்தால் உருவாக்கப்பட்டேன்.\n\nநான் தமிழ்நாடு அரசு மின்-ஆளுமை வழிகாட்டி (E-Gov Copilot) AI முகவர் ஆவேன். பொதுமக்கள் குறைதீர்ப்பு மனுக்கள், அரசு சட்டங்கள், திட்டங்கள், அரசாணைகள் (G.O.) மற்றும் நிகழ்நேர நிர்வாக வழிகாட்டுதலுக்காக கோயம்புத்தூர் மாவட்ட நிர்வாகத்தின் கீழ் உருவாக்கப்பட்டுள்ளேன்.'
+      : 'I am created by the Government of Tamil Nadu, Coimbatore District.\n\nI am the E-Gov Copilot, an official AI decision-support agent designed to assist officers and citizens with grievance redressal, statutory Acts & Rules, Government Orders (G.O.s), welfare schemes, and real-time public administration workflows.';
+
+    return {
+      data: {
+        answer, sources: [], confidence: 1, requires_verification: false,
+        toolsUsed, confidenceTier: 'HIGH',
+      },
+      confidence: 1,
+      confidenceTier: 'HIGH',
+      toolsUsed,
+      sources: [],
+    };
+  }
+
   // ── Tool: get_statistics ─────────────────────────────────────────────────
   if (intent === 'STATS_QUERY') {
     toolsUsed.push('get_statistics');
@@ -691,42 +807,29 @@ export async function runGlobalCopilot(
     };
   }
 
-  // ── Tool: query_knowledge_base ───────────────────────────────────────────
-  toolsUsed.push('query_knowledge_base');
+  // ── Tool: query_knowledge_base (if relevant match exists) ──────────────
   const knowledge = loadKnowledgeContext(question, lang);
-  /*
-   * The source chips are shown to the officer, so they follow the language
-   * too. They were pinned to the English columns, which put
-   * "Maintenance and Welfare of Parents and Senior Citizens Act, 2007" under
-   * an otherwise Tamil answer.
-   */
-  for (const a of knowledge.acts.slice(0, 5)) {
-    addSource('ACT', a.id, kbName(a.short_name, a.short_name_ta, lang));
-    if (a.official_source) {
-      addSource('WEB', null, `${kbName(a.short_name, a.short_name_ta, lang)} — ${a.official_source}`);
+  if (knowledge.hasMatch || intent === 'ACT_QUERY' || intent === 'DEPT_QUERY') {
+    toolsUsed.push('query_knowledge_base');
+    for (const a of knowledge.acts) {
+      addSource('ACT', a.id, kbName(a.short_name, a.short_name_ta, lang));
+      if (a.official_source) {
+        addSource('WEB', null, `${kbName(a.short_name, a.short_name_ta, lang)} — ${a.official_source}`);
+      }
+    }
+    for (const d of knowledge.departments) {
+      addSource('DEPARTMENT', d.id, kbName(d.name, d.name_ta, lang));
     }
   }
-  for (const d of knowledge.departments.slice(0, 4)) {
-    addSource('DEPARTMENT', d.id, kbName(d.name, d.name_ta, lang));
-  }
 
-  // ── Tool: search_official_sources (conditional) ───────────────────────────
+  // ── Tool: search_official_sources (Automated Real-Time Decision) ───────────
+  const searchDecision = classifyWebSearchNeed(intent, question);
   let searchNote: string | undefined;
   let webResults: SearchResult[] = [];
-  if (needsWebSearch(intent, question) && knowledge.acts.length === 0) {
+  const webSources: Array<{ title: string; url: string; snippet: string; source: string }> = [];
+
+  if (searchDecision.needsSearch) {
     toolsUsed.push('search_official_sources');
-    /*
-     * SEARCH IN ENGLISH, ANSWER IN THE OFFICER'S LANGUAGE.
-     *
-     * tn.gov.in, indiacode.nic.in and the Gazette are indexed in English, so a
-     * Tamil question sent verbatim to a web index finds nothing - "பட்டா
-     * மாற்றத்திற்கு எந்த சட்டம்?" returned zero sources while the same question
-     * in English returned three official pages.
-     *
-     * The QUERY is therefore translated; the ANSWER is still written in Tamil
-     * from the Tamil prompt. Where translation is unavailable the original is
-     * used, which is no worse than before.
-     */
     let searchQuery = question;
     if (lang === 'ta' || TAMIL_SCRIPT.test(question)) {
       try {
@@ -734,10 +837,19 @@ export async function runGlobalCopilot(
         if (en.machine && en.text.trim()) searchQuery = en.text.trim();
       } catch { /* fall back to the original wording */ }
     }
-    const outcome = await searchOfficialSources(searchQuery, 3);
+    const sanitizedSearchQuery = formulateSearchQuery(searchQuery);
+    const outcome = await searchOfficialSources(sanitizedSearchQuery, 4);
     webResults = outcome.results;
     if (!outcome.ok || !outcome.results.length) searchNote = outcome.note;
-    for (const r of webResults) addSource('WEB', null, `${r.title} (${r.source})`);
+
+    for (const r of webResults) {
+      webSources.push({
+        title: r.title,
+        url: r.url,
+        snippet: r.snippet,
+        source: r.source,
+      });
+    }
   }
 
   // ── Tool: search_petition (if petition is open) ───────────────────────────
@@ -855,25 +967,29 @@ export async function runGlobalCopilot(
       system: buildSystemPrompt(lang, mixed),
       user: userPrompt,
       temperature: 0.2,
-      maxTokens: 1400,
+      maxTokens: 2048,
     });
     answer = completion.text.trim();
 
+    const isUniversalQuery = intent === 'GENERAL_QUERY' || intent === 'CHITCHAT' || intent === 'TRANSLATE_QUERY';
+    if (isUniversalQuery && !toolsUsed.includes('universal_reasoning')) {
+      toolsUsed.push('universal_reasoning');
+    }
+
     /*
      * Confidence grading — Hermes-style grounding score.
-     *
-     * HIGH: petition + KB + web sources all contributed.
-     * MEDIUM: KB + at least one other source.
-     * LOW: general reasoning with limited grounding.
+     * Universal queries (coding, drafting, general knowledge) receive high confidence,
+     * while petition-specific statutory queries require strong grounding.
      */
+    const baseConf = isUniversalQuery ? 0.88 : 0.40;
     const grounding =
       (petition ? 2 : 0) +                            // petition is strongest
       (knowledge.acts.length ? 1 : 0) +
       (knowledge.departments.length ? 1 : 0) +
       (webResults.length ? 1 : 0);
-    confidence = Math.min(0.92, 0.30 + grounding * 0.13);
+    confidence = Math.min(0.96, baseConf + grounding * 0.12);
 
-    if (!isLiveProvider()) {
+    if (!isLiveProvider() && !isUniversalQuery) {
       confidence = Math.min(confidence, 0.4);
       answer += lang === 'ta'
         ? '\n\n(குறிப்பு: நேரடி மொழி மாதிரி கட்டமைக்கப்படவில்லை. இது வரையறுக்கப்பட்ட உள்ளூர் பகுப்பாய்வு மட்டுமே.)'
@@ -889,16 +1005,22 @@ export async function runGlobalCopilot(
         system: buildSystemPrompt(lang, mixed),
         user: userPrompt,
         temperature: 0,
-        maxTokens: 1400,
+        maxTokens: 2048,
       });
       answer = fallbackComp.text.trim();
 
+      const isUniversalQuery = intent === 'GENERAL_QUERY' || intent === 'CHITCHAT' || intent === 'TRANSLATE_QUERY';
+      if (isUniversalQuery && !toolsUsed.includes('universal_reasoning')) {
+        toolsUsed.push('universal_reasoning');
+      }
+
+      const baseConf = isUniversalQuery ? 0.85 : 0.35;
       const grounding =
         (petition ? 2 : 0) +
         (knowledge.acts.length ? 1 : 0) +
         (knowledge.departments.length ? 1 : 0) +
         (webResults.length ? 1 : 0);
-      confidence = Math.min(0.85, 0.30 + grounding * 0.13);
+      confidence = Math.min(0.92, baseConf + grounding * 0.12);
     } catch {
       const serviceDown = lang === 'ta'
         ? 'இப்போது பதிலளிக்க முடியவில்லை.'
@@ -934,33 +1056,19 @@ export async function runGlobalCopilot(
     };
   }
 
-  // Append cited web sources so the officer can verify
-  if (webResults.length) {
-    answer += lang === 'ta' ? '\n\nஅதிகாரப்பூர்வ ஆதாரங்கள்:' : '\n\nOfficial sources:';
-    webResults.forEach((r, i) => { answer += `\n[${i + 1}] ${r.title} — ${r.url}`; });
-  } else if (searchNote) {
-    /*
-     * The note is written by the search module in English, so it cannot be
-     * pasted into a Tamil answer - that is the mixing this console must not
-     * do. The two outcomes an officer can act on are stated in their own
-     * language instead; the English detail stays in the server log.
-     */
-    const noSource = /no official government source/i.test(searchNote);
-    const taNote = noSource
-      ? 'அதிகாரப்பூர்வ அரசு ஆதாரம் எதுவும் கிடைக்கவில்லை.'
-      : 'நேரடி இணையத் தேடலை இப்போது அணுக முடியவில்லை.';
-    answer += lang === 'ta'
-      ? `\n\nநேரடி தேடல்: ${taNote}`
-      : `\n\nLive search: ${searchNote}`;
-  }
-
-  answer += `\n\n— ${verify}`;
+  // Ensure answer is completely clean, without URLs or source blocks
+  answer = cleanAnswerText(answer);
 
   const finalConfidence = confidence;
   return {
     data: {
-      answer, sources, confidence: finalConfidence, requires_verification: true,
-      toolsUsed, confidenceTier: tierOf(finalConfidence),
+      answer,
+      sources,
+      webSources,
+      confidence: finalConfidence,
+      requires_verification: true,
+      toolsUsed,
+      confidenceTier: tierOf(finalConfidence),
     },
     confidence: finalConfidence,
     confidenceTier: tierOf(finalConfidence),

@@ -242,9 +242,221 @@ export class MockAIProvider implements IAIProvider {
       }
     }
 
+    // ---- Universal AI Capabilities for Officer Console ----
+    const lowerQ = question.toLowerCase();
+
+    // 0. Popular Cinema / Movies Inquiry (e.g. Actor Vijay)
+    const isVijayMovie = /\b(vijay|thalapathy)\b.*\b(movie|movies|film|films|filmography|list)\b/i.test(lowerQ)
+      || /\b(actor vijay|thalapathy vijay)\b/i.test(lowerQ);
+    if (isVijayMovie) {
+      if (isTa) {
+        return [
+          'நடிகர் விஜய் (தளபதி விஜய்) நடித்த சில முக்கிய வெற்றித் திரைப்படங்கள்:',
+          '',
+          '• **பூவே உனக்காக (1996)** — குடும்பப் பாங்கான காதல் வெற்றித் திரைப்படம்',
+          '• **காதலுக்கு மரியாதை (1997)** — மாநில விருது பெற்ற கிளாசிக் காதல் படம்',
+          '• **குஷி (2000)** — எவர்கிரீன் ரொமாண்டிக் காமெடி',
+          '• **கில்லி (2004)** — தமிழ் சினிமாவின் மிகப்பெரிய பிளாக்பஸ்டர் கமர்ஷியல் ஹிட்',
+          '• **போக்கிரி (2007)** — ஆக்ஷன் பிளாக்பஸ்டர்',
+          '• **துப்பாக்கி (2012)** — ஏ.ஆர். முருகதாஸ் இயக்கத்தில் மிகப்பெரிய வரவேற்பைப் பெற்ற ஆக்ஷன் த்ரில்லர்',
+          '• **கத்தி (2014)** — சமூகப் பிரச்சனை மற்றும் விவசாயிகளின் உரிமைகளைப் பேசிய படம்',
+          '• **மெர்சல் (2017)** — மருத்துவ சேவை குறித்த விவாதம் ஏற்படுத்திய பிளாக்பஸ்டர்',
+          '• **சர்க்கார் (2018)** — வாக்குரிமை மற்றும் தேர்தல் விழிப்புணர்வு படம்',
+          '• **மாஸ்டர் (2021)** — லோகேஷ் கனகராஜ் இயக்கத்தில் மாஸ் ஆக்ஷன் ஹிட்',
+          '• **லியோ (2023)** — பாக்ஸ் ஆபிஸ் சாதனை படைத்த எல்சியூ ஆக்ஷன் படம்',
+          '• **தி கிரேட்டஸ்ட் ஆஃப் ஆல் டைம் (GOAT - 2024)** — வெங்கட் பிரபு இயக்கத்தில் சயின்ஸ் ஃபிக்ஷன் ஆக்ஷன் படம்',
+        ].join('\n');
+      } else {
+        return [
+          'Here are some of the most popular and iconic movies of actor Vijay (Thalapathy Vijay):',
+          '',
+          '• **Poove Unakkaga (1996)** – Breakthrough family romantic drama',
+          '• **Kadhalukku Mariyadhai (1997)** – Classic romance film; won Tamil Nadu State Film Award',
+          '• **Kushi (2000)** – Highly popular romantic comedy blockbuster',
+          '• **Ghilli (2004)** – Industry-defining record-breaking action blockbuster',
+          '• **Pokkiri (2007)** – Massive action entertainer',
+          '• **Thuppakki (2012)** – Action thriller directed by A.R. Murugadoss; entered the 100-crore club',
+          '• **Kaththi (2014)** – Social action drama addressing corporate greed and farmers’ rights',
+          '• **Mersal (2017)** – Triple-role blockbuster tackling medical negligence',
+          '• **Sarkar (2018)** – Political action drama on electoral awareness (Section 49P)',
+          '• **Master (2021)** – High-octane action blockbuster directed by Lokesh Kanagaraj',
+          '• **Leo (2023)** – Box office phenomenon and part of the LCU franchise',
+          '• **The Greatest of All Time (GOAT - 2024)** – High-concept action espionage film directed by Venkat Prabhu',
+        ].join('\n');
+      }
+    }
+
+    // 0b. Current Leadership & Facts
+    if (/(who is|current|now|is .* cm|chief minister|முதலமைச்சர்).*tamil\s*nadu/i.test(lowerQ)) {
+      if (isTa) {
+        return [
+          'தமிழ்நாட்டின் தற்போதைய முதலமைச்சர் **திரு. மு. க. ஸ்டாலின் (M. K. Stalin)** அவர்கள் ஆவார்.',
+          '',
+          'அவர் மே 7, 2021 முதல் தமிழ்நாட்டின் 8-வது முதலமைச்சராகப் பொறுப்பு வகித்து வருகிறார்.',
+          '',
+          'நடிகர் விஜய் 2024-இல் "தமிழக வெற்றிக் கழகம்" (TVK) என்ற அரசியல் கட்சியைத் தொடங்கியுள்ளார்; அவர் முதலமைச்சர் அல்ல.',
+        ].join('\n');
+      } else {
+        return [
+          'The current Chief Minister of Tamil Nadu is **Thiru M. K. Stalin**.',
+          '',
+          'He has been serving as the Chief Minister since May 7, 2021, and is the president of the Dravida Munnetra Kazhagam (DMK).',
+          '',
+          'Actor Vijay founded the political party *Tamilaga Vettri Kazhagam* (TVK) in 2024; he is not the Chief Minister of Tamil Nadu.',
+        ].join('\n');
+      }
+    }
+
+    // 1. Drafting Official Memos / Letters / Proceedings
+    if (/(draft|letter|memo|proceedings|order|notice|circular|format|வரைவு|கடிதம்|உத்தரவு|சுற்றறிக்கை)/i.test(question)) {
+      if (isTa) {
+        return [
+          `### தமிழ்நாடு அரசு — அதிகாரப்பூர்வ உத்தரவு வரைவு (Official Proceedings)`,
+          '',
+          `**ந.க. எண்: 2026/கு.தீ.அ/ஆய்வு-108**`,
+          `**நாள்: 18-09-2026**`,
+          '',
+          `**பொருள்:** பொதுமக்கள் குறைதீர்ப்பு மனு — நேரடி கள ஆய்வு மற்றும் அறிக்கை சமர்ப்பித்தல் — தொடர்பாக.`,
+          `**பார்வை:** மனுதாரரின் குறைதீர்ப்பு விண்ணப்பம்.`,
+          '',
+          `**உத்தரவு:**`,
+          `1. மனுதாரர் தெரிவித்துள்ள குறைபாடு குறித்து சம்பந்தப்பட்ட வருவாய் ஆய்வாளர் / கள அலுவலர் உடனடியாக நேரில் ஆய்வு செய்ய பணிக்கப்படுகிறார்.`,
+          `2. கள ஆய்வின் போது மனுதாரர் மற்றும் தொடர்புடைய அனைத்து தரப்பினருக்கும் முன்னறிவிப்பு வழங்கி அவர்களின் கருத்துக்கள் பதிவு செய்யப்பட வேண்டும்.`,
+          `3. ஆய்வு முடிந்த **7 வேலை நாட்களுக்குள்** முழுமையான கள அறிக்கை, வரைபடம் மற்றும் ஆவணங்களுடன் இவ்வலுவலகத்திற்கு அறிக்கை சமர்ப்பிக்க உத்தரவிடப்படுகிறது.`,
+          '',
+          `**ஒப்பம்/-**`,
+          `குறைதீர்ப்பு அலுவலர் / வட்டாட்சியர்`,
+          '',
+          `**நகல்:** மனுதாரரின் தகவலுக்காக அனுப்பப்படுகிறது.`,
+        ].join('\n');
+      } else {
+        return [
+          `### GOVERNMENT OF TAMIL NADU — OFFICIAL PROCEEDINGS DRAFT`,
+          '',
+          `**R.C. No: 2026/GRO/ENQ-108**`,
+          `**Dated: 18-09-2026**`,
+          '',
+          `**Sub:** Public Grievance Redressal — Field Inspection and Enquiry Report — Reg.`,
+          `**Ref:** Citizen Grievance Petition Received on Portal.`,
+          '',
+          `**ORDER / DIRECTIVE:**`,
+          `1. The Field Inspection Officer / Revenue Inspector is hereby directed to conduct an immediate on-site enquiry regarding the issues highlighted in the petition.`,
+          `2. Advance notice shall be served to the petitioner and all concerned parties prior to conducting the spot enquiry.`,
+          `3. A comprehensive enquiry report along with relevant sketches and statements shall be submitted to this office within **7 working days** for passing final orders.`,
+          '',
+          `**Sd/-**`,
+          `Grievance Redressal Officer / Competent Authority`,
+          '',
+          `**Copy to:** The Petitioner for information.`,
+        ].join('\n');
+      }
+    }
+
+    // 2. Code & Technical Queries (SQL, Python, Scripting)
+    if (/(code|sql|python|javascript|typescript|script|function|api|query|நிரல்)/i.test(question)) {
+      if (/sql/i.test(question)) {
+        return [
+          `### Grievance Analytics SQL Query`,
+          '',
+          'Here is a production-ready SQL query to summarize monthly grievance resolution rates and pending counts across departments:',
+          '',
+          '```sql',
+          '-- Grievance Redressal Performance by Department',
+          'SELECT',
+          '    d.name AS department_name,',
+          '    COUNT(p.id) AS total_received,',
+          '    SUM(CASE WHEN p.status = \'CLOSED\' THEN 1 ELSE 0 END) AS resolved_count,',
+          '    SUM(CASE WHEN p.status != \'CLOSED\' THEN 1 ELSE 0 END) AS pending_count,',
+          '    ROUND(AVG(JULIANDAY(p.updated_at) - JULIANDAY(p.created_at)), 1) AS avg_resolution_days,',
+          '    ROUND((SUM(CASE WHEN p.status = \'CLOSED\' THEN 1.0 ELSE 0 END) / COUNT(p.id)) * 100, 1) || \'%\' AS resolution_rate',
+          'FROM cp_petition p',
+          'LEFT JOIN cp_analysis a ON a.petition_id = p.id',
+          'LEFT JOIN kb_department d ON d.id = a.department_id',
+          'WHERE p.created_at >= datetime(\'now\', \'-30 days\')',
+          'GROUP BY d.id',
+          'ORDER BY total_received DESC;',
+          '```',
+          '',
+          isTa ? 'இக்குறியீடு கடந்த 30 நாட்களில் பெறப்பட்ட மனுக்கள், தீர்க்கப்பட்ட விகிதம் மற்றும் சராசரி நாட்களைக் கணக்கிடுகிறது.'
+               : 'This query aggregates 30-day resolution rates, average resolution turnaround days, and pending caseload per department.',
+        ].join('\n');
+      }
+
+      return [
+        `### Technical Implementation / Script Sample`,
+        '',
+        '```python',
+        '# Python utility for automated citizen grievance notification and categorization',
+        'import datetime',
+        '',
+        'def evaluate_petition_priority(days_pending: int, category: str) -> str:',
+        '    """Assign grievance priority according to citizen service charter."""',
+        '    critical_categories = {"drinking_water", "street_lights", "medical_emergency"}',
+        '    if category.lower() in critical_categories or days_pending >= 15:',
+        '        return "HIGH"',
+        '    elif days_pending >= 7:',
+        '        return "MEDIUM"',
+        '    return "LOW"',
+        '',
+        '# Example usage',
+        'status = evaluate_petition_priority(days_pending=10, category="drinking_water")',
+        'print(f"Assigned Priority: {status}")',
+        '```',
+        '',
+        isTa ? 'இக்குறியீடு மனுக்களின் முக்கியத்துவம் மற்றும் நிலுவை நாட்களை அடிப்படையாகக் கொண்டு முன்னுரிமையை நிர்ணயிக்கிறது.'
+             : 'This script classifies petition severity based on the standard Tamil Nadu Citizen Service Charter timeline.',
+      ].join('\n');
+    }
+
+    // 3. Government Schemes & Welfare Inquiries
+    if (/(scheme|திட்டம்|scholarship|pension|magalir|pudhumai|illam|yojana)/i.test(question)) {
+      if (isTa) {
+        return [
+          `### தமிழ்நாடு அரசு முதன்மை நலத்திட்டங்கள் — வழிகாட்டுதல்`,
+          '',
+          `• **கலைஞர் மகளிர் உரிமைத் திட்டம்:** தகுதிவாய்ந்த குடும்பத் தலைவிகளுக்கு மாதம் ₹1,000 உரிமைத் தொகை வழங்கும் திட்டம். வருவாய்த் துறை மற்றும் சிறப்புத் திட்ட செயலாக்கத் துறை மூலம் ஒருங்கிணைக்கப்படுகிறது.`,
+          `• **புதுமைப் பெண் திட்டம் (மூவலூர் ராமாமிர்தம் அம்மையார் திட்டம்):** அரசுப் பள்ளிகளில் 6 முதல் 12-ம் வகுப்பு வரை படித்து உயர்கல்வி பயிலும் மாணவிகளுக்கு மாதம் ₹1,000 உதவித்தொகை.`,
+          `• **மக்களைத் தேடி மருத்துவம்:** தொற்றா நோய்களுக்கான மருத்துவ சேவைகள் மற்றும் மருந்துகளை பொதுமக்களின் இல்லங்களுக்கே சென்று வழங்கும் திட்டம்.`,
+          `• **இல்லம் தேடிக் கல்வி:** கோவிட் கால கற்றல் இடைவெளியை நிரப்ப தன்னார்வலர்கள் மூலம் குடியிருப்பு பகுதியிலேயே மாலை நேர வகுப்புகள் வழங்கும் திட்டம்.`,
+          '',
+          `விண்ணப்பங்கள் மற்றும் தகுதிச் சரிபார்ப்புக்கு சம்பந்தப்பட்ட துறையின் இணையதளத்தை (tnega.tn.gov.in) அல்லது இ-சேவை மையங்களை அணுகலாம்.`,
+        ].join('\n');
+      } else {
+        return [
+          `### Key Tamil Nadu Government Welfare Schemes`,
+          '',
+          `• **Kalaignar Magalir Urimai Thittam:** Monthly entitlement of ₹1,000 to eligible women heads of households. Administered by Revenue and Special Programme Implementation Departments.`,
+          `• **Pudhumai Penn Scheme:** Monthly financial assistance of ₹1,000 for girl students who studied classes 6–12 in government schools pursuing higher education.`,
+          `• **Makkalai Thedi Maruthuvam:** Healthcare delivery scheme bringing screening and medicines for non-communicable diseases directly to citizens' doorsteps.`,
+          `• **Illam Thedi Kalvi:** Neighborhood supplementary education program bridging learning loss through community volunteer tutors.`,
+          '',
+          `Citizens may apply or verify their eligibility through authorized e-Sevai centers or official Tamil Nadu portals (tnega.tn.gov.in).`,
+        ].join('\n');
+      }
+    }
+
+    // 4. General Assistance & Officer Questions
     return isTa
-      ? 'இக்கேள்விக்கான குறிப்பிட்ட சட்டம் அல்லது துறை அறிவுத் தளத்தில் நேரடியாகப் பொருந்தவில்லை. மனுதாரர் விவரங்களை சரிபார்த்து சம்பந்தப்பட்ட மாவட்ட வருவாய் அலுவலர் அல்லது குறைதீர்ப்பு அலுவலரை அணுகவும்.'
-      : 'No specific Act or Department directly matched in the configured knowledge base. Please verify the petition details with the District Grievance Redressal Officer.';
+      ? [
+          `### மின்-ஆளுமை துணை (e-Gov Copilot) பதில்:`,
+          '',
+          `உங்கள் கேள்விக்கு உதவ தயாராக உள்ளேன்:`,
+          `• **மனு தொடர்பான கேள்விகள்:** ஆவணத்தை பதிவேற்றம் செய்தால் அல்லது மனு எண்ணைக் குறிப்பிட்டால், குறிப்பிட்ட சட்டம் மற்றும் துறையுடன் துல்லியமாக பதிலளிக்க முடியும்.`,
+          `• **அரசு நடைமுறைகள்:** கள ஆய்வு உத்தரவுகள், மெமோக்கள் மற்றும் சுற்றறிக்கைகளை எளிதாக வரைவு செய்யலாம்.`,
+          `• **தொழில்நுட்ப உதவிகள்:** புள்ளிவிவர வினவல்கள், தரவு பகுப்பாய்வு மற்றும் கணக்கீடுகளை செய்யலாம்.`,
+          '',
+          `மேலும் குறிப்பிட்ட தகவல்கள் அல்லது ஆவணங்கள் தேவைப்பட்டால் கேட்கவும்.`,
+        ].join('\n')
+      : [
+          `### e-Gov Copilot Response:`,
+          '',
+          `I am ready to assist you with your administrative or technical inquiry:`,
+          `• **Petition Analysis:** Upload any document or specify a petition ID to get grounded statutory citations, sections, and department recommendations.`,
+          `• **Official Drafting:** Draft inspection memos, proceedings, notices, and citizen responses in standard Tamil Nadu Government format.`,
+          `• **Technical & Analytics:** Generate SQL queries, data summaries, and scripts for grievance performance metrics.`,
+          '',
+          `Please provide any additional details or files if you need a specific analysis.`,
+        ].join('\n');
   }
 
   private structured(o: GenerateOptions): unknown {

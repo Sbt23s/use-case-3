@@ -176,7 +176,7 @@ export function PetitionDetail({ petitionId, feed, onBack }: {
   const p = d.petition;
   const analysed = p.analysis_status === 'COMPLETED' && d.analysis;
   // The bilingual analysis blob; the flat columns beside it are English only.
-  const full = d.analysis?.full;
+  const full = d.analysis?.full ?? d.analysis;
 
   /*
    * Show a knowledge-base name in the selected language.
@@ -188,6 +188,8 @@ export function PetitionDetail({ petitionId, feed, onBack }: {
     const v = b && typeof b === 'object' ? (b[lang] || b.en) : b;
     return v || fallback || <span className="muted">{t('ai.noneMatched')}</span>;
   };
+
+  const val = (b: any) => (b && typeof b === 'object' ? (b[lang] || b.en || '') : String(b ?? ''));
 
   return (
     <>
@@ -225,22 +227,7 @@ export function PetitionDetail({ petitionId, feed, onBack }: {
 
           <div id="ai-analysis">
             {analysed ? (
-              <>
-                <AnalysisPanel d={d} />
-
-                {/*
-                  * Closing actions, at the end of the analysis where the
-                  * officer finishes reading. OK returns to the dashboard;
-                  * Download produces the official report as a PDF.
-                  */}
-                {pdfErr && <div className="poc-note err" style={{ marginTop: 12 }}>{pdfErr}</div>}
-                <div className="reply-actions">
-                  <button className="btn primary" onClick={onBack}>{t('agent.ok')}</button>
-                  <button className="btn" disabled={pdfBusy} onClick={downloadReport}>
-                    {pdfBusy ? t('agent.preparing') : t('agent.download')}
-                  </button>
-                </div>
-              </>
+              <AnalysisPanel d={d} />
             ) : (
               <div className="poc-card">
                 <div className="body">
@@ -300,8 +287,49 @@ export function PetitionDetail({ petitionId, feed, onBack }: {
             </div>
           </div>
 
-          {/* Workflow Stages moved to the right side underneath the AI Overview box */}
+          {/* Workflow Stages on the right side underneath the AI Overview box */}
           <WorkflowStages petitionId={petitionId} feed={feed} />
+
+          {/* Recommended Next Action Card moved to the right side */}
+          {analysed && full?.next_action && (
+            <div className="poc-card">
+              <header>
+                <h3>{t('an.nextAction')}</h3>
+                <span className={`poc-chip ${
+                  (full.priority === 'URGENT' || full.priority === 'HIGH') ? 'warn' : ''
+                }`}>
+                  {t(`an.${full.priority || 'NORMAL'}`)} {t('an.priority')}
+                </span>
+              </header>
+              <div className="body">
+                <p style={{ margin: '0 0 12px 0', lineHeight: 1.55, color: '#1e293b' }}>
+                  {val(full.next_action)}
+                </p>
+                {full.priority_reason && (
+                  <>
+                    <h4 className="mt" style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#64748b', marginBottom: 4 }}>
+                      {t('an.priorityWhy')}
+                    </h4>
+                    <p className="small muted" style={{ margin: 0, lineHeight: 1.5 }}>
+                      {val(full.priority_reason)}
+                    </p>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {analysed && (
+            <>
+              {pdfErr && <div className="poc-note err" style={{ marginTop: 12 }}>{pdfErr}</div>}
+              <div className="reply-actions" style={{ marginTop: 16 }}>
+                <button className="btn primary" onClick={onBack}>{t('agent.ok')}</button>
+                <button className="btn" disabled={pdfBusy} onClick={downloadReport}>
+                  {pdfBusy ? t('agent.preparing') : t('agent.download')}
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </>

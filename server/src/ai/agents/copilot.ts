@@ -17,6 +17,7 @@ import type { IAIProvider } from '../provider.js';
 export interface CopilotAnswer {
   answer: string;
   sources: { type: string; id: number | null; label: string }[];
+  webSources?: Array<{ title: string; url: string; snippet: string; source: string }>;
   confidence: number;
   requires_verification: true;
   /*

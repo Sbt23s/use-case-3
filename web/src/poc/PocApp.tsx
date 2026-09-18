@@ -6,6 +6,7 @@ import { PetitionDetail } from './PetitionDetail';
 import { pocApi, setPocToken, getPocToken, clearPocToken, type PocUser } from './pocApi';
 import { AppFooter } from './AppFooter';
 import { CopilotPanel } from './CopilotPanel';
+import { CopilotAgentView } from './CopilotAgentView';
 import { AiSettingsDialog } from './AiSettingsDialog';
 import { useI18n, LanguageToggle } from '../lib/i18n';
 import { displayName } from '../lib/translit';
@@ -160,8 +161,11 @@ export function PocApp() {
       <nav className="poc-nav">
         <div className="poc-nav-left">
           <button
-            className={openId === null ? 'on' : ''}
-            onClick={() => setOpenId(null)}
+            className={openId === null && !copilot ? 'on' : ''}
+            onClick={() => {
+              setCopilot(false);
+              setOpenId(null);
+            }}
           >
             {t('nav.petitions')}
           </button>
@@ -175,7 +179,7 @@ export function PocApp() {
         </div>
 
         {/* Global Search Box in Grey Navbar - Shown ONLY on Dashboard */}
-        {openId === null && (
+        {openId === null && !copilot && (
           <form className="nav-search-form" onSubmit={handleNavSearch} role="search">
             <div className="nav-search-box">
               <input
@@ -219,20 +223,22 @@ export function PocApp() {
         )}
       </nav>
 
-      <main className="poc-main">
-        {openId === null
-          ? <OfficerDashboard feed={feed} live={live} onOpen={setOpenId} searchQ={activeSearch} onClearSearch={handleClearSearch} />
-          : <PetitionDetail petitionId={openId} feed={feed} onBack={() => setOpenId(null)} />}
+      <main className={`poc-main${copilot ? ' poc-main-copilot' : ''}`}>
+        {copilot ? (
+          <CopilotAgentView
+            feed={feed}
+            petitionId={openId}
+            onClose={() => setCopilot(false)}
+          />
+        ) : openId === null ? (
+          <OfficerDashboard feed={feed} live={live} onOpen={setOpenId} searchQ={activeSearch} onClearSearch={handleClearSearch} />
+        ) : (
+          <PetitionDetail petitionId={openId} feed={feed} onBack={() => setOpenId(null)} />
+        )}
       </main>
 
-      <AppFooter />
+      {!copilot && <AppFooter />}
 
-      {/*
-        * Mounted alongside the console, not in place of it. `feed` is shared so
-        * the panel follows a document it uploads on the same live stream the
-        * rest of the console is already listening to.
-        */}
-      {copilot && <CopilotPanel feed={feed} onClose={() => setCopilot(false)} />}
       {aiSettings && <AiSettingsDialog onClose={() => setAiSettings(false)} />}
     </div>
   );

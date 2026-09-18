@@ -1795,28 +1795,60 @@ cpRouter.post('/ai-providers/test', requirePermission('ADMIN_CONFIGURE'), async 
 // =================================================== GLOBAL E-GOV COPILOT
 /** The officer's conversation so far, so a reopened panel is not blank. */
 cpRouter.get('/e-gov-chat', requirePermission('AI_ANALYZE'), (req, res) => {
-  const rows = db.prepare(`
-    SELECT id, role, content, sources, confidence, tools_used, confidence_tier, created_at
-      FROM egov_chat_message
-     WHERE asked_by = ?
-     ORDER BY id DESC LIMIT 40
-  `).all(req.user!.id) as any[];
-  res.json({ messages: rows.reverse() });
+  const convId = req.query.conversationId as string | undefined;
+  const rows = convId
+    ? (db.prepare(`
+        SELECT id, role, content, sources, web_sources, confidence, tools_used, confidence_tier, conversation_id, created_at
+          FROM egov_chat_message
+         WHERE asked_by = ? AND conversation_id = ?
+         ORDER BY id DESC LIMIT 50
+      `).all(req.user!.id, convId) as any[])
+    : (db.prepare(`
+        SELECT id, role, content, sources, web_sources, confidence, tools_used, confidence_tier, conversation_id, created_at
+          FROM egov_chat_message
+         WHERE asked_by = ?
+         ORDER BY id DESC LIMIT 50
+      `).all(req.user!.id) as any[]);
+
+  res.json({
+    messages: rows.reverse().map((r) => {
+      let sources = [];
+      let webSources = [];
+      let toolsUsed = [];
+      try { sources = r.sources ? JSON.parse(r.sources) : []; } catch { /* ignore */ }
+      try { webSources = r.web_sources ? JSON.parse(r.web_sources) : []; } catch { /* ignore */ }
+      try { toolsUsed = r.tools_used ? JSON.parse(r.tools_used) : []; } catch { /* ignore */ }
+      return {
+        id: r.id,
+        role: r.role,
+        content: r.content,
+        sources,
+        webSources,
+        confidence: r.confidence,
+        toolsUsed,
+        confidenceTier: r.confidence_tier,
+        conversationId: r.conversation_id,
+        createdAt: r.created_at,
+      };
+    }),
+  });
 });
 
 /** Start a fresh conversation. The audit trail keeps the old one. */
 cpRouter.delete('/e-gov-chat', requirePermission('AI_ANALYZE'), (req, res) => {
-  const r = db.prepare('DELETE FROM egov_chat_message WHERE asked_by = ?').run(req.user!.id);
+  const convId = req.query.conversationId as string | undefined;
+  const r = convId
+    ? db.prepare('DELETE FROM egov_chat_message WHERE asked_by = ? AND conversation_id = ?').run(req.user!.id, convId)
+    : db.prepare('DELETE FROM egov_chat_message WHERE asked_by = ?').run(req.user!.id);
   audit(req, req.user!, {
     action: 'EGOV_CHAT_CLEARED', entityType: 'egov_chat', entityId: 0,
-    oldValue: { messages: r.changes },
+    oldValue: { messages: r.changes, conversationId: convId },
   });
   res.json({ cleared: r.changes });
 });
 
 /*
- * Migrate egov_chat_message to include tools_used and confidence_tier columns.
- * These were added in the Hermes-pattern upgrade; existing databases need them.
+ * Migrate egov_chat_message to include tools_used, confidence_tier, web_sources, and conversation_id columns.
  */
 db.exec(`
   CREATE TABLE IF NOT EXISTS egov_chat_message (
@@ -1824,9 +1856,11 @@ db.exec(`
     role            TEXT NOT NULL,
     content         TEXT NOT NULL,
     sources         TEXT,
+    web_sources     TEXT,
     confidence      REAL,
     tools_used      TEXT,
     confidence_tier TEXT,
+    conversation_id TEXT,
     asked_by        INTEGER REFERENCES app_user(id),
     created_at      TEXT NOT NULL DEFAULT (datetime('now'))
   );
@@ -1835,6 +1869,8 @@ db.exec(`
 // Migrate existing rows — add columns if the table already existed without them
 try { db.exec("ALTER TABLE egov_chat_message ADD COLUMN tools_used TEXT"); } catch { /* already exists */ }
 try { db.exec("ALTER TABLE egov_chat_message ADD COLUMN confidence_tier TEXT"); } catch { /* already exists */ }
+try { db.exec("ALTER TABLE egov_chat_message ADD COLUMN web_sources TEXT"); } catch { /* already exists */ }
+try { db.exec("ALTER TABLE egov_chat_message ADD COLUMN conversation_id TEXT"); } catch { /* already exists */ }
 
 cpRouter.post('/e-gov-chat', requirePermission('AI_ANALYZE'), async (req, res) => {
   const S = z.object({
@@ -1846,22 +1882,30 @@ cpRouter.post('/e-gov-chat', requirePermission('AI_ANALYZE'), async (req, res) =
   const parsed = S.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: 'A question is required' }); return; }
 
+  const convId = parsed.data.conversationId || 'default';
+
   /*
    * Load conversation history BEFORE storing the new question, so the agent
-   * sees the exchange up to this point. A follow-up like "which department?"
-   * after "which Act applies?" resolves correctly against prior turns.
+   * sees the exchange up to this point in this conversation thread.
    */
-  const history = (db.prepare(`
-    SELECT role, content FROM egov_chat_message
-     WHERE asked_by = ?
-     ORDER BY id DESC LIMIT 8
-  `).all(req.user!.id) as any[])
+  const history = (convId
+    ? db.prepare(`
+        SELECT role, content FROM egov_chat_message
+         WHERE asked_by = ? AND conversation_id = ?
+         ORDER BY id DESC LIMIT 8
+      `).all(req.user!.id, convId)
+    : db.prepare(`
+        SELECT role, content FROM egov_chat_message
+         WHERE asked_by = ? AND (conversation_id IS NULL OR conversation_id = 'default')
+         ORDER BY id DESC LIMIT 8
+      `).all(req.user!.id)
+  )
     .reverse()
-    .map((m) => ({ role: m.role as 'USER' | 'ASSISTANT', content: String(m.content ?? '') }));
+    .map((m: any) => ({ role: m.role as 'USER' | 'ASSISTANT', content: String(m.content ?? '') }));
 
   db.prepare(
-    'INSERT INTO egov_chat_message (role, content, asked_by) VALUES (?, ?, ?)',
-  ).run('USER', parsed.data.question, req.user!.id);
+    'INSERT INTO egov_chat_message (role, content, asked_by, conversation_id) VALUES (?, ?, ?, ?)',
+  ).run('USER', parsed.data.question, req.user!.id, convId);
 
   try {
     const result = await runTask(
@@ -1876,16 +1920,17 @@ cpRouter.post('/e-gov-chat', requirePermission('AI_ANALYZE'), async (req, res) =
     );
 
     const ins = db.prepare(`
-      INSERT INTO egov_chat_message (role, content, sources, confidence, tools_used, confidence_tier, asked_by)
-      VALUES ('ASSISTANT', ?, ?, ?, ?, ?, ?)
+      INSERT INTO egov_chat_message (role, content, sources, web_sources, confidence, tools_used, confidence_tier, asked_by, conversation_id)
+      VALUES ('ASSISTANT', ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       result.data.answer,
       JSON.stringify(result.data.sources),
+      JSON.stringify(result.data.webSources ?? []),
       result.data.confidence,
-      // `runTask` forwards only `data`, so the tool trail travels inside it.
       JSON.stringify(result.data.toolsUsed ?? []),
       result.data.confidenceTier ?? null,
       req.user!.id,
+      convId,
     );
 
     res.json({

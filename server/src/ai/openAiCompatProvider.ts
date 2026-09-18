@@ -60,8 +60,8 @@ const VENDORS: Record<CompatVendor, VendorSpec> = {
    */
   groq: {
     baseUrl: 'https://api.groq.com/openai/v1',
-    // Verified against the live endpoint's own model list.
-    defaultModel: 'openai/gpt-oss-20b',
+    // High-performance live models on Groq
+    defaultModel: 'openai/gpt-oss-120b',
     needsKey: true,
     label: 'Groq',
     jsonMode: 'response_format',
@@ -90,6 +90,8 @@ const VENDORS: Record<CompatVendor, VendorSpec> = {
     jsonMode: 'prompt',
   },
 };
+
+const GROQ_MODEL_FALLBACKS = ['openai/gpt-oss-120b', 'qwen/qwen3.8-27b'];
 
 export class OpenAiCompatProvider extends BaseLiveProvider {
   readonly name: string;
@@ -122,7 +124,7 @@ export class OpenAiCompatProvider extends BaseLiveProvider {
 
   protected async call(
     o: GenerateOptions,
-    opts: { json?: boolean; attempt?: number } = {},
+    opts: { json?: boolean; attempt?: number; modelOverride?: string; triedModels?: string[] } = {},
   ): Promise<AICompletion> {
     if (!this.available) {
       throw new Error(`${this.spec.label} is not configured (missing API key).`);
@@ -131,6 +133,7 @@ export class OpenAiCompatProvider extends BaseLiveProvider {
     const started = Date.now();
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    const activeModel = opts.modelOverride || this.model;
 
     try {
       const messages: { role: string; content: string }[] = [];
@@ -150,7 +153,7 @@ export class OpenAiCompatProvider extends BaseLiveProvider {
       });
 
       const body: Record<string, unknown> = {
-        model: this.model,
+        model: activeModel,
         messages,
         temperature: o.temperature ?? 0.2,
         max_tokens: o.maxTokens ?? 2048,
@@ -172,6 +175,22 @@ export class OpenAiCompatProvider extends BaseLiveProvider {
       if (!res.ok) {
         const detail = await res.text().catch(() => '');
         const attempt = opts.attempt ?? 0;
+
+        // Groq automatic model fallback if a model hits rate limits or quota depletion (429)
+        if (this.vendor === 'groq' && (res.status === 429 || res.status === 404)) {
+          const tried = opts.triedModels ?? [activeModel];
+          const nextModel = GROQ_MODEL_FALLBACKS.find((m) => !tried.includes(m));
+          if (nextModel) {
+            console.warn(`[groq] model ${activeModel} returned ${res.status}, automatically falling back to ${nextModel}`);
+            return this.call(o, {
+              ...opts,
+              modelOverride: nextModel,
+              triedModels: [...tried, nextModel],
+              attempt: 0,
+            });
+          }
+        }
+
         if (shouldRetry(res.status, detail, attempt)) {
           await sleep(RETRY_DELAYS[attempt]);
           return this.call(o, { ...opts, attempt: attempt + 1 });
@@ -208,7 +227,7 @@ export class OpenAiCompatProvider extends BaseLiveProvider {
         throw new Error(`${this.spec.label} returned no text (${finish}).`);
       }
 
-      return { text, model: this.model, latencyMs: Date.now() - started, raw: json };
+      return { text, model: activeModel, latencyMs: Date.now() - started, raw: json };
     } catch (e) {
       /*
        * A local daemon that is not running produces a connection error rather
