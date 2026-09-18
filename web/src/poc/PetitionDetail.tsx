@@ -811,8 +811,29 @@ function PetitionerCard({ petition: p, extracted }: { petition: any; extracted: 
           {row(t('pet.address'), p.citizen_address, 'address')}
           <dt>{t('pet.language')}</dt>
           {/* The name of the language, in the console's own language: a Tamil
-              console showed "தமிழ் / Tamil", which mixes the two in one field. */}
-          <dd>{p.language === 'ta' ? t('lang.ta') : t('lang.en')}</dd>
+              console showed "தமிழ் / Tamil", which mixes the two in one field.
+              The toggle lets an officer correct a wrong auto-detection inline. */}
+          <dd style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span>{p.language === 'ta' ? t('lang.ta') : t('lang.en')}</span>
+            <button
+              id="btn-toggle-petition-language"
+              title={p.language === 'ta' ? 'Switch to English' : 'தமிழுக்கு மாற்று'}
+              style={{
+                fontSize: 11, padding: '2px 8px', borderRadius: 4,
+                background: 'var(--c-accent, #2563eb)', color: '#fff',
+                border: 'none', cursor: 'pointer', lineHeight: 1.4,
+              }}
+              onClick={async () => {
+                const next = p.language === 'ta' ? 'en' : 'ta';
+                try {
+                  await pocApi.patch(`/cp/petitions/${p.id}/language`, { language: next });
+                  load();
+                } catch (e: any) { alert(e.message); }
+              }}
+            >
+              {p.language === 'ta' ? 'English ↔' : '↔ தமிழ்'}
+            </button>
+          </dd>
           <dt>{t('pet.received')}</dt>
           <dd>{fmtTime(p.created_at, lang)}</dd>
           {extracted?.document_date && (

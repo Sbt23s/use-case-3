@@ -217,9 +217,31 @@ function recordDocumentLanguage(docId: number, text: string | null): void {
     const lang = ta > en ? 'ta' : 'en';
     const doc = db.prepare('SELECT petition_id FROM cp_document WHERE id = ?').get(docId) as any;
     if (!doc) return;
-    db.prepare(
-      "UPDATE cp_petition SET language = ? WHERE id = ? AND (language IS NULL OR language = 'auto')",
-    ).run(lang, doc.petition_id);
+    /*
+     * Override the petition language when the document is clearly Tamil.
+     *
+     * Officer upload defaults to 'en' before the file is read, so a Tamil
+     * scan was permanently stuck showing "English" even after OCR proved it
+     * was Tamil. We now allow the update whenever the document is clearly
+     * Tamil (more Tamil chars than English), regardless of what the petition
+     * already stores — a machine reading of the actual document is more
+     * reliable than a form default. English stays conservative: we only
+     * promote to 'en' when the petition is still at 'auto' / NULL.
+     */
+    const doc2 = db.prepare('SELECT language FROM cp_petition WHERE id = ?').get(doc.petition_id) as any;
+    if (!doc2) return;
+    const current = doc2.language as string | null;
+    if (lang === 'ta') {
+      // Tamil is a strong signal — update regardless of current value.
+      db.prepare('UPDATE cp_petition SET language = ? WHERE id = ?')
+        .run('ta', doc.petition_id);
+    } else {
+      // English only updates when no language was detected yet.
+      if (!current || current === 'auto') {
+        db.prepare('UPDATE cp_petition SET language = ? WHERE id = ?')
+          .run('en', doc.petition_id);
+      }
+    }
   } catch { /* language is a convenience; never fail the upload for it */ }
 }
 
@@ -337,6 +359,19 @@ function nextReference(): string {
   return `CP-${year}-${String((Number.isFinite(last) ? last : 0) + 1).padStart(4, '0')}`;
 }
 
+/**
+ * Detect the dominant script in a text.
+ *
+ * Tamil characters are a strong indicator — if they outnumber Latin letters the
+ * petition is Tamil regardless of what the form default says. Used at submit
+ * time (subject + description) and at OCR time (extracted document text).
+ */
+function detectLangFromText(text: string): 'ta' | 'en' {
+  const ta = (text.match(/[\u0B80-\u0BFF]/g) || []).length;
+  const en = (text.match(/[A-Za-z]/g) || []).length;
+  return ta > en && (ta + en) > 5 ? 'ta' : 'en';
+}
+
 // =================================================== REAL-TIME STREAM
 /**
  * Server-sent events.
@@ -389,7 +424,14 @@ const SubmitSchema = z.object({
 });
 
 cpRouter.post('/petitions', requirePermission('PETITION_CREATE'), (req, res) => {
-  const parsed = SubmitSchema.safeParse(req.body);
+  // Auto-detect language from subject+description; a Tamil petition typed in
+  // the description field must not sit in the DB as 'en'.
+  const bodyLang = req.body.language;
+  const autoLang = bodyLang && bodyLang !== 'auto'
+    ? bodyLang
+    : detectLangFromText(`${req.body.subject || ''} ${req.body.description || ''}`);
+
+  const parsed = SubmitSchema.safeParse({ ...req.body, language: autoLang });
   if (!parsed.success) {
     res.status(400).json({ error: 'Validation failed', issues: parsed.error.issues });
     return;
@@ -445,13 +487,21 @@ cpRouter.post(
   upload.single('file'),
   async (req, res) => {
     // Parse form fields — multipart sends everything as strings.
+    // Auto-detect language from subject + description before insert.
+    // A Tamil petition typed in the description field must not start as 'en'
+    // just because the form did not send an explicit language field.
+    const subjectAndDesc = `${req.body.subject || ''} ${req.body.description || ''}`;
+    const detectedLang = req.body.language && req.body.language !== 'auto'
+      ? req.body.language
+      : detectLangFromText(subjectAndDesc);
+
     const raw = {
       citizen_name: req.body.citizen_name,
       citizen_phone: req.body.citizen_phone || undefined,
       citizen_address: req.body.citizen_address || undefined,
       subject: req.body.subject,
       description: req.body.description,
-      language: req.body.language || 'en',
+      language: detectedLang,
     };
 
     const parsed = SubmitSchema.safeParse(raw);
@@ -613,6 +663,67 @@ cpRouter.post(
     })();
   },
 );
+
+
+/** Officer can manually correct the language of a petition. */
+cpRouter.patch('/petitions/:id/language', requirePermission('AI_ANALYZE'), (req, res) => {
+  const id = Number(req.params.id);
+  const lang = req.body.language;
+  if (lang !== 'ta' && lang !== 'en') {
+    res.status(400).json({ error: 'language must be "ta" or "en"' }); return;
+  }
+  const p = db.prepare('SELECT id FROM cp_petition WHERE id = ?').get(id) as any;
+  if (!p) { res.status(404).json({ error: 'Petition not found' }); return; }
+  db.prepare('UPDATE cp_petition SET language = ? WHERE id = ?').run(lang, id);
+  audit(req, req.user!, {
+    action: 'CP_PETITION_LANGUAGE_SET', entityType: 'cp_petition', entityId: id,
+    newValue: { language: lang },
+  });
+  res.json({ ok: true, language: lang });
+});
+
+/**
+ * Backfill language for all existing petitions.
+ *
+ * Petitions created before language auto-detection was added are stored as
+ * 'en'. This endpoint re-checks every petition that has OCR text and sets
+ * the language correctly. Safe to call multiple times (idempotent).
+ */
+cpRouter.post('/petitions/backfill-language', requirePermission('AI_ANALYZE'), (req, res) => {
+  const petitions = db.prepare(
+    "SELECT p.id, p.language, p.subject, p.description FROM cp_petition p"
+  ).all() as any[];
+
+  let updated = 0;
+  for (const p of petitions) {
+    // Try OCR text from documents first
+    const docs = db.prepare(
+      "SELECT COALESCE(ocr_corrected_text, extracted_text) AS text FROM cp_document WHERE petition_id = ? AND ocr_status = 'COMPLETED'"
+    ).all(p.id) as any[];
+
+    const allText = [
+      p.subject || '', p.description || '',
+      ...docs.map((d: any) => d.text || ''),
+    ].join(' ');
+
+    if (!allText.trim()) continue;
+
+    const ta = (allText.match(/[\u0B80-\u0BFF]/g) || []).length;
+    const en = (allText.match(/[A-Za-z]/g) || []).length;
+    if (ta + en < 10) continue;
+
+    const lang = ta > en ? 'ta' : 'en';
+    if (p.language === lang) continue;
+
+    // Tamil: always override. English: only if currently wrong and content is clearly English.
+    if (lang === 'ta' || p.language !== 'ta') {
+      db.prepare('UPDATE cp_petition SET language = ? WHERE id = ?').run(lang, p.id);
+      updated++;
+    }
+  }
+
+  res.json({ ok: true, checked: petitions.length, updated });
+});
 
 
 cpRouter.post('/petitions/:id/documents', requirePermission('DOCUMENT_UPLOAD'),
