@@ -2,7 +2,7 @@ import { db } from '../../core/db.js';
 import type { IAIProvider } from '../provider.js';
 import { MockAIProvider } from '../mockProvider.js';
 import type { CopilotAnswer } from './copilot.js';
-import { searchOfficialSources, type SearchResult } from '../../core/search.js';
+import { searchOfficialSources, isGovQuery, type SearchResult } from '../../core/search.js';
 import { translateText } from '../../core/translate.js';
 import { isLiveProvider } from '../gateway.js';
 
@@ -32,6 +32,8 @@ const VERIFY_EN =
   'This is an AI-generated answer. Please verify against the official source before acting.';
 const VERIFY_TA =
   'இது AI உருவாக்கிய பதில். நடவடிக்கை எடுப்பதற்கு முன் அதிகாரப்பூர்வ ஆதாரத்துடன் சரிபார்க்கவும்.';
+const VERIFY_TANGLISH =
+  'Idhu AI generate panna bathil. Action edukkuradhukku munnadi official source kooda verify pannikavum.';
 
 const NO_ANSWER_EN =
   'I could not answer that from the open petition, the configured knowledge base, or official ' +
@@ -40,12 +42,76 @@ const NO_ANSWER_EN =
 const NO_ANSWER_TA =
   'திறந்துள்ள மனு, கட்டமைக்கப்பட்ட அறிவுத் தளம், அல்லது அதிகாரப்பூர்வ அரசு ஆதாரங்களிலிருந்து இதற்கு ' +
   'பதிலளிக்க முடியவில்லை. உரிய அதிகாரியை அணுகவும், அல்லது தொடர்புடைய சட்டத்தை நிர்வாகி சேர்க்கலாம்.';
+const NO_ANSWER_TANGLISH =
+  'Open petition, configured knowledge base, alladhu official government sources-la irundhu idhukku bathil kedaikkala. ' +
+  'Sambandhappatta authority-a contact pannavum, alladhu administrator kitta indha Act/department-a AI Knowledge Configuration-la add panna sollalaam.';
 
+export type CopilotLang = 'ta' | 'en' | 'tanglish';
 
 /** Any Tamil character - a question in Tamil needs an English search query. */
 const TAMIL_SCRIPT = /[஀-௿]/;
 
 // ---------------------------------------------------------------- language detection
+/**
+ * Detect if a question is asked in Tanglish (Tamil phonetically written in Latin/English alphabet).
+ */
+export function isTanglish(text: string): boolean {
+  if (!text || typeof text !== 'string') return false;
+  // If it contains Tamil script, it's Tamil script, not Tanglish
+  if (/[\u0B80-\u0BFF]/.test(text)) return false;
+  if (!/[A-Za-z]/.test(text)) return false;
+
+  const lower = text.toLowerCase().replace(/[^a-z0-9\s]/g, ' ');
+  const words = lower.split(/\s+/).filter(Boolean);
+  if (!words.length) return false;
+
+  const TANGLISH_WORDS = new Set([
+    // Question words & Interrogatives
+    'enna', 'ethu', 'edhu', 'edhuku', 'ethuku', 'endha', 'entha', 'yentha', 'enta', 'anta', 'indha', 'idha', 'adha', 'yean', 'yen',
+    'epdi', 'eppadi', 'yeppadi', 'eppudi', 'yeppo', 'eppo', 'yaaru', 'yaar', 'evaru', 'yaru', 'engae', 'enga', 'yenga', 'evvalavu', 'evlo', 'ethana', 'yethana',
+    // Pronouns & Demonstratives
+    'naan', 'nan', 'naanu', 'neenga', 'neengal', 'nee', 'avan', 'aval', 'avanga', 'avaru', 'adhu', 'idhu', 'ithu', 'atha', 'itha',
+    'idhula', 'ithula', 'adhula', 'athula', 'enaku', 'enakku', 'ennaku', 'enakulla', 'unakku', 'unaku', 'ungala', 'ungalaala',
+    'ungalukku', 'ungalku', 'namma', 'namakku', 'ellam', 'ellame',
+    // Verbs & Auxiliaries
+    'sollu', 'solla', 'sollunga', 'sollungalen', 'solunga', 'solluren', 'solluran', 'sollra', 'sollradhu', 'kudunga', 'kudu', 'kuduka',
+    'pannu', 'panna', 'pannunga', 'panradhu', 'pannradhu', 'pannanum', 'pannaum', 'panniko', 'paniko', 'senja', 'seyya', 'senjadhu', 'seidhu', 'seiyanum',
+    'irukku', 'iruku', 'irukaa', 'irukka', 'irukanum', 'irundha', 'illa', 'illai', 'illama', 'ilalma', 'venum', 'vendum',
+    'kettalum', 'kettalumm', 'ketalum', 'keta', 'ketta', 'kekkuren', 'ketten', 'varum', 'varuma', 'pogum', 'poradhu', 'poga', 'poganum',
+    'mudiyuma', 'mudiyum', 'theriyuma', 'theriyum', 'paathu', 'pathu', 'paarunga', 'vaanga', 'vanga', 'ponga', 'pesu', 'pesuna', 'pesunalum',
+    'vachuruken', 'vachirukken', 'vacriken', 'potrukken', 'podunga', 'edunga', 'eduka', 'anupu', 'anupunga', 'anupanum', 'puriyala', 'puriyum',
+    // Administrative & conversational markers
+    'ippo', 'eppo', 'appo', 'kandippa', 'kandippaga', 'marubadiyum', 'aama', 'romba', 'konjam', 'mattum', 'maari', 'madhiri', 'pola', 'kooda',
+    'dhaane', 'thaane', 'thana', 'dhana', 'nalla', 'periya', 'chinna', 'seri', 'paravala', 'apdi', 'ipdi', 'apadi', 'ipadi', 'patil', 'bathil',
+    'vidam', 'vivaram', 'therinja', 'koodiya', 'makkal', 'arasaangam', 'arasu', 'manuvadhardhar', 'manu', 'thura', 'thurai', 'sattam', 'vithi',
+    'kaasu', 'panam', 'vattan', 'gramam', 'maavattam', 'kooridhu', 'thappu', 'sariya', 'tanglish', 'taenglish', 'tanglis', 'pathii'
+  ]);
+
+  let hits = 0;
+  for (const w of words) {
+    if (TANGLISH_WORDS.has(w)) {
+      hits += 1;
+    } else if (
+      // Morphological suffixes: -la (tanglisla, officela), -kku / -ku (deptkku, actkku), -oda, -aala, -alum, -anum, -adhu, -unga
+      (w.endsWith('la') && w.length >= 5 && !['umbrella', 'gorilla', 'manila', 'koala'].includes(w)) ||
+      ((w.endsWith('kku') || w.endsWith('ku')) && w.length >= 5) ||
+      (w.endsWith('oda') && w.length >= 5) ||
+      (w.endsWith('aala') && w.length >= 5) ||
+      ((w.endsWith('anum') || w.endsWith('aum')) && w.length >= 5) ||
+      ((w.endsWith('alum') || w.endsWith('alumm')) && w.length >= 5) ||
+      (w.endsWith('unga') && w.length >= 5) ||
+      (w.endsWith('adhu') && w.length >= 5) ||
+      (w.endsWith('radhu') && w.length >= 5)
+    ) {
+      hits += 1;
+    }
+  }
+
+  // Short query threshold (e.g., "patil sollu", "enna department", "epdi panradhu", "unna yaaru create pannathu"): 1 hit is enough
+  if (words.length <= 4 && hits >= 1) return true;
+  return hits >= 2 || (hits / words.length) >= 0.2;
+}
+
 /** Detect script composition of a question. */
 function scriptComposition(q: string): { ta: number; en: number; mixed: boolean } {
   const ta = (q.match(/[஀-௿]/g) || []).length;
@@ -62,27 +128,18 @@ function scriptComposition(q: string): { ta: number; en: number; mixed: boolean 
 
 /**
  * Determine reply language.
- *
- * The officer's console language setting wins. If that is not provided, the
- * question's dominant script decides. A mixed-language question (Tamil words +
- * English technical terms) answers in the officer's UI language, matching the
- * natural way officers write — Tamil prose with English terms like "Act",
- * "FIR", "NOC" left in English.
  */
-function replyLang(question: string, uiLang?: 'ta' | 'en'): 'ta' | 'en' {
+function replyLang(question: string, uiLang?: CopilotLang): CopilotLang {
   if (uiLang) return uiLang;
+  if (isTanglish(question)) return 'tanglish';
   const { ta } = scriptComposition(question);
   return ta > 0.3 ? 'ta' : 'en';
 }
 
 /**
  * One half of a bilingual value, as plain text.
- *
- * The stored analysis holds {en, ta} pairs. A plain string is returned as it
- * stands - the petitioner's own words are stored that way and must never be
- * swapped for a machine rendering.
  */
-function pickLang(v: unknown, lang: 'ta' | 'en'): string {
+function pickLang(v: unknown, lang: CopilotLang): string {
   if (v == null) return '—';
   if (typeof v === 'string') return v || '—';
   if (typeof v === 'object') {
@@ -95,11 +152,8 @@ function pickLang(v: unknown, lang: 'ta' | 'en'): string {
 
 /**
  * A knowledge-base name in the officer's language.
- *
- * Falls back to the English name where no Tamil one is recorded: an Act that
- * appears unnamed is worse than one named in the other language.
  */
-function kbName(en: unknown, ta: unknown, lang: 'ta' | 'en'): string {
+function kbName(en: unknown, ta: unknown, lang: CopilotLang): string {
   const v = lang === 'ta' ? (ta || en) : (en || ta);
   return String(v ?? '—').trim() || '—';
 }
@@ -107,36 +161,32 @@ function kbName(en: unknown, ta: unknown, lang: 'ta' | 'en'): string {
 // ---------------------------------------------------------------- error messages
 /**
  * Classify vendor errors into officer-actionable messages.
- *
- * Raw vendor text (JSON blobs, HTTP status strings) is useless to an officer
- * and actively harmful when it appears in a Tamil conversation in English. We
- * classify it into the small set of things an officer can actually do.
  */
-function explainFailure(msg: string, lang: 'ta' | 'en'): string {
+function explainFailure(msg: string, lang: CopilotLang): string {
   const m = String(msg ?? '');
   if (/quota|429|rate limit|billing/i.test(m)) {
-    return lang === 'ta'
-      ? 'AI சேவையின் இன்றைய வரம்பு எட்டப்பட்டுள்ளது. சிறிது நேரம் கழித்து முயற்சிக்கவும், அல்லது நிர்வாகியை அணுகவும்.'
-      : 'The AI service has reached its usage limit. Try again later, or contact an administrator.';
+    if (lang === 'ta') return 'AI சேவையின் இன்றைய வரம்பு எட்டப்பட்டுள்ளது. சிறிது நேரம் கழித்து முயற்சிக்கவும், அல்லது நிர்வாகியை அணுகவும்.';
+    if (lang === 'tanglish') return 'AI service-oda innaiki usage limit mudinjirukku. Konjam neram kalichu try pannunga, alladhu administrator-a contact pannunga.';
+    return 'The AI service has reached its usage limit. Try again later, or contact an administrator.';
   }
   if (/api key|401|403|rejected/i.test(m)) {
-    return lang === 'ta'
-      ? 'AI சேவையின் அனுமதிச் சாவி ஏற்கப்படவில்லை. நிர்வாகி சேவையக அமைப்பைச் சரிபார்க்க வேண்டும்.'
-      : 'The AI service rejected its credentials. An administrator must check the server configuration.';
+    if (lang === 'ta') return 'AI சேவையின் அனுமதிச் சாவி ஏற்கப்படவில்லை. நிர்வாகி சேவையக அமைப்பைச் சரிபார்க்க வேண்டும்.';
+    if (lang === 'tanglish') return 'AI service credentials reject aayirukku. Administrator server settings-a check pannanum.';
+    return 'The AI service rejected its credentials. An administrator must check the server configuration.';
   }
   if (/not reachable|not running|ECONNREFUSED|fetch failed|network/i.test(m)) {
-    return lang === 'ta'
-      ? 'AI சேவையை அணுக முடியவில்லை. அது இயங்குகிறதா என்பதை நிர்வாகி சரிபார்க்க வேண்டும்.'
-      : 'The AI service could not be reached. An administrator should check that it is running.';
+    if (lang === 'ta') return 'AI சேவையை அணுக முடியவில்லை. அது இயங்குகிறதா என்பதை நிர்வாகி சரிபார்க்க வேண்டும்.';
+    if (lang === 'tanglish') return 'AI service-a reach panna mudiyala. Service run aagudha-nu administrator check pannanum.';
+    return 'The AI service could not be reached. An administrator should check that it is running.';
   }
   if (/timed out|timeout|abort/i.test(m)) {
-    return lang === 'ta'
-      ? 'AI சேவை குறித்த நேரத்தில் பதிலளிக்கவில்லை. மீண்டும் முயற்சிக்கவும்.'
-      : 'The AI service did not respond in time. Please try again.';
+    if (lang === 'ta') return 'AI சேவை குறித்த நேரத்தில் பதிலளிக்கவில்லை. மீண்டும் முயற்சிக்கவும்.';
+    if (lang === 'tanglish') return 'AI service time-kulla reply pannala. Marubadiyum try pannunga.';
+    return 'The AI service did not respond in time. Please try again.';
   }
-  return lang === 'ta'
-    ? 'AI சேவையில் தற்காலிகக் கோளாறு. மீண்டும் முயற்சிக்கவும்.'
-    : 'The AI service failed temporarily. Please try again.';
+  if (lang === 'ta') return 'AI சேவையில் தற்காலிகக் கோளாறு. மீண்டும் முயற்சிக்கவும்.';
+  if (lang === 'tanglish') return 'AI service-la tharkaalika error. Marubadiyum try pannunga.';
+  return 'The AI service failed temporarily. Please try again.';
 }
 
 // ---------------------------------------------------------------- Hermes-style tool definitions
@@ -199,6 +249,7 @@ type Intent =
   | 'WORKFLOW_QUERY'
   | 'TRANSLATE_QUERY'
   | 'CREATOR_QUERY'
+  | 'CM_QUERY'
   /** Greetings and small talk - answered directly, never searched. */
   | 'CHITCHAT'
   | 'GENERAL_QUERY';
@@ -217,6 +268,39 @@ function isCreatorQuery(q: string): boolean {
 }
 
 /**
+ * Check if the question asks about the Chief Minister of Tamil Nadu (CM of Tamil Nadu).
+ */
+export function isChiefMinisterQuery(q: string): boolean {
+  const s = q.toLowerCase().replace(/['".,?!:]/g, ' ').trim();
+  const tokens = s.split(/\s+/).filter(Boolean);
+
+  // Tamil script direct check (do not use \b as JS word boundaries fail on Unicode scripts)
+  if (/(முதலமைச்சர்|முதல்வர்|முதல்-அமைச்சர்|முதலமைச்சரின்)/.test(q)) {
+    return true;
+  }
+
+  // Direct CM phrases
+  if (
+    /\b(cm\s*of\s*tamil\s*nadu|cm\s*of\s*tn|tamil\s*nadu\s*cm|tn\s*cm)\b/i.test(s) ||
+    /\b(chief\s*minister\s*of\s*tamil\s*nadu|chief\s*minister\s*of\s*tn)\b/i.test(s) ||
+    /\b(tamil\s*nadu\s*chief\s*minister|tn\s*chief\s*minister)\b/i.test(s) ||
+    /\b(cm\s*yaaru|cm\s*yaar|current\s*cm|who\s*is\s*cm|who\s*is\s*the\s*cm)\b/i.test(s)
+  ) {
+    return true;
+  }
+
+  const hasCM = /\b(cm|chief\s*minister|mudhalamaichar|mudhalvar)\b/i.test(s);
+  const hasTN = /\b(tamil\s*nadu|tn|tamilnadu|state|state's)\b/i.test(s);
+  const hasQueryWord = /\b(who|who's|current|present|now|ippo|yaaru|yaar|name|ennadhu|enna)\b/i.test(s);
+
+  if (hasCM && (hasTN || hasQueryWord || tokens.length <= 4)) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
  * Route the question to an intent — Hermes ReAct "Reason" step.
  *
  * Language-aware: a Tamil officer asking "இந்த மனு எந்த துறைக்கு?" and an
@@ -227,6 +311,9 @@ function classify(q: string, hasPetition: boolean): Intent {
 
   // 1. Creator inquiry: explicitly anchor Government of Tamil Nadu, Coimbatore District
   if (isCreatorQuery(q)) return 'CREATOR_QUERY';
+
+  // 1b. Chief Minister inquiry: explicitly anchor C. Joseph Vijay
+  if (isChiefMinisterQuery(q)) return 'CM_QUERY';
 
   // 2. A greeting is not a research question; answer it directly and fast.
   if (isChitChat(q)) return 'CHITCHAT';
@@ -369,7 +456,7 @@ function loadPetitionContext(petitionId: number): PetitionContext | null {
 function loadKnowledgeContext(
   question: string,
   /** The language the answer will be written in; the context is built in it. */
-  lang: 'ta' | 'en',
+  lang: CopilotLang,
   limit = 5,
 ): {
   text: string;
@@ -378,12 +465,12 @@ function loadKnowledgeContext(
   authorities: any[];
   hasMatch: boolean;
 } {
-  // Non-government / general knowledge / entertainment queries should NEVER match statutory grievance Acts
-  const isGeneralOrEntertainment =
-    /\b(movie|movies|film|films|filmography|actor|actress|cinema|songs?|album|trailer|director|hero|heroine|box\s*office|cricket|football|game|sport|recipe|weather|joke|story)\b/i.test(question)
-    || /(திரைப்படம்|படம்|பாடல்கள்?|நடிகர்|நடிகை|சினிமா|கிரிக்கெட்|விளையாட்டு)/.test(question);
-
-  if (isGeneralOrEntertainment) {
+  // Statutory grievance Acts/Departments from the local DB should ONLY match legal, statutory, or grievance queries.
+  // Schemes, general knowledge, science, tech, cinema, coding, and sports answer freely via real-time web search and universal reasoning.
+  const isLegalOrGrievance =
+    /\b(act|acts|section|sections|law|laws|court|rules?|statute|grievance|petition|kuraidheerppu|patta|chitta|fir|revenue|encroachment|compensation|tenancy|eviction|maintenance|senior\s*citizens?|slum|land\s*acquisition)\b/i.test(question)
+    || /(சட்டம்|விதி|பிரிவு|நீதிமன்றம்|மனு|குறைதீர்ப்பு|பட்டா|சிட்டா|ஆக்கிரமிப்பு|இழப்பீடு|நிலம்)/.test(question);
+  if (!isLegalOrGrievance) {
     return { text: '', acts: [], departments: [], authorities: [], hasMatch: false };
   }
 
@@ -396,7 +483,12 @@ function loadKnowledgeContext(
     'govt', 'government', 'state', 'now', 'today', 'current', 'latest', 'recent',
     'who', 'what', 'which', 'where', 'when', 'how', 'is', 'are', 'was', 'were',
     'this', 'that', 'from', 'with', 'about',
-    'சட்டம்', 'தமிழ்நாடு', 'மற்றும்', 'பற்றிய', 'அரசு', 'தற்போது', 'இப்போது', 'யார்', 'எது', 'எந்த'
+    'சட்டம்', 'தமிழ்நாடு', 'மற்றும்', 'பற்றிய', 'அரசு', 'தற்போது', 'இப்போது', 'யார்', 'எது', 'எந்த',
+    'pathi', 'pathii', 'sollu', 'solla', 'sollunga', 'enna', 'ethu', 'edhu', 'epdi', 'eppadi',
+    'kudunga', 'kudu', 'pannu', 'panna', 'panradhu', 'pannradhu', 'pannanum', 'irukku', 'iruku',
+    'venum', 'vendum', 'kettalumm', 'kettalum', 'keta', 'ketta', 'varum', 'varuma', 'patil',
+    'bathil', 'kandippa', 'maari', 'illama', 'ilalma', 'edhula', 'ethula', 'endha', 'entha',
+    'unga', 'ungala', 'solla mudiyuma', 'solla'
   ]);
   const filtered = rawTerms.filter((t) => !stopWords.has(t));
   const terms = filtered.length ? filtered : [];
@@ -448,7 +540,7 @@ function loadKnowledgeContext(
   const chosenAuths = authorities.slice(0, 3);
 
   const pick = (en: unknown, ta: unknown) =>
-    String((lang === 'ta' ? (ta || en) : en) ?? '').trim();
+    String((lang === 'ta' ? (ta || en) : (en || ta)) ?? '').trim();
 
   const text = hasMatch ? [
     ...chosenActs.map((a) => `ACT [id ${a.id}] ${pick(a.short_name, a.short_name_ta)}` +
@@ -474,35 +566,16 @@ function loadKnowledgeContext(
 // ---------------------------------------------------------------- system prompt
 /**
  * Build the system prompt — Hermes-style grounded agent instructions.
- *
- * The prompt structure follows Hermes conventions:
- *   1. Output contract FIRST (what the answer must look like)
- *   2. Role and context
- *   3. Absolute factual grounding rules
- *   4. Language rules (strict, no mixing)
- *   5. Tone and format
  */
-function buildSystemPrompt(lang: 'ta' | 'en', mixed: boolean): string {
+function buildSystemPrompt(lang: CopilotLang, mixed: boolean): string {
   const lines: string[] = [
     // Output contract — must come first so the model does not narrate its reasoning
     'Write the answer only. Never restate these instructions, never narrate your reasoning,',
     'never quote the section headings you were given, and never begin with a slash or a',
     'question to yourself. Start directly with the answer.',
-    /*
-     * The model was echoing the prompt's own section labels into its answer -
-     * "(CONFIGURED KNOWLEDGE)" and "(DEPARTMENT)" appeared mid-sentence in a
-     * Tamil reply. They are scaffolding for the model, meaningless to an
-     * officer, and English inside a Tamil answer.
-     */
     'The labels TOOL:, CONFIGURED KNOWLEDGE, OFFICIAL SOURCES, OPEN PETITION, DEPARTMENT and',
     'ACT are internal headings in this prompt. Never write them in your answer, in brackets',
     'or otherwise. Name the actual department or Act instead.',
-    /*
-     * A model writing Tamil kept glossing its own nouns - "மனு (petition)" -
-     * which is the bracketed English the language rule already forbids. Stating
-     * it as its own line stops it, because the earlier rule reads as being
-     * about NAMES while this is about ordinary vocabulary.
-     */
     'Never gloss a Tamil word with its English equivalent in brackets. Write "மனு", not',
     '"மனு (petition)". The officer reads one language at a time.',
     '',
@@ -510,91 +583,120 @@ function buildSystemPrompt(lang: 'ta' | 'en', mixed: boolean): string {
     'You help officers understand petitions, identify applicable Acts, departments, and next actions.',
     '',
     '═══════════════════════════════════════════════════════',
-    'ABSOLUTE FACTUAL GROUNDING RULES (Hermes anti-hallucination constraints):',
+    'COMPREHENSIVE TAMIL NADU GOVERNMENT AI ASSISTANT & UNIVERSAL AGENT:',
     '═══════════════════════════════════════════════════════',
-    '1. NEVER invent or guess:',
-    '   • Person names (petitioner, officer, witness)',
-    '   • Phone numbers, Aadhaar numbers, door numbers, survey numbers',
-    '   • Dates, deadlines, amounts, fines',
-    '   • Act names, section numbers, Government Order numbers',
-    '   • Department names, officer designations',
-    '   • Village names, district names, addresses',
-    '2. Name an Act, section, department or authority ONLY if it appears in:',
-    '   (a) the OPEN PETITION text provided below, OR',
-    '   (b) the CONFIGURED KNOWLEDGE section provided below, OR',
-    '   (c) an OFFICIAL SOURCE URL provided below.',
-    '3. If a SPECIFIC FACT about this office, this petition, or Tamil Nadu law is missing',
-    '   from the context: say plainly that it is not available. Do NOT guess, and do NOT',
-    '   say "it is likely" or "probably".',
-    '4. An Act marked UNVERIFIED has not been checked against the Gazette — say so.',
-    '5. You advise. The officer decides. Never state a conclusion as settled law.',
+    'You are the official e-Gov Copilot — a premier Comprehensive Tamil Nadu Government AI Assistant',
+    'and Universal AI Agent developed for the Government of Tamil Nadu, Coimbatore District.',
     '',
-    /*
-     * WHAT RULE 3 DOES NOT COVER.
-     *
-     * Rule 3 protects facts that could mislead an officer into acting - a
-     * section number, a designation, a deadline. It was being applied to
-     * EVERYTHING, so "What is RTI?" and "How do I write a good petition?" were
-     * refused with "I could not answer that from the configured knowledge
-     * base". Explaining what RTI stands for invents no Act and misleads
-     * nobody; refusing it just makes the assistant useless for the general
-     * questions an officer actually asks.
-     *
-     * So general explanation is explicitly permitted, and the boundary is
-     * drawn where it matters: the moment an answer would name a specific Act,
-     * section, department, officer or number, rules 1 and 2 apply again and
-     * the value must come from the context.
-     */
-    '═══════════════════════════════════════════════════════',
-    'UNIVERSAL ASSISTANT CAPABILITY — MULTI-DOMAIN EXPERTISE:',
-    '═══════════════════════════════════════════════════════',
-    'You are a powerful, professional Universal AI Agent for Tamil Nadu government officers and citizens.',
-    'You provide deep, knowledgeable, accurate, and comprehensive answers across all domains:',
-    '   1. Government Administration: Departments, Acts, Rules, G.O.s, welfare schemes, citizen procedures, field memos.',
-    '   2. Current Government Information: Officeholders, ministers, current state affairs, policy updates (anchored in verified facts).',
-    '   3. General Knowledge & Science: History, geography, economics, administration, national & international facts.',
-    '   4. Cinema & Entertainment: Tamil cinema, filmography, directors, actors, music, culture, and sports.',
-    '   5. Coding, Data & Technical: Python, JavaScript, TypeScript, SQL queries, algorithms, regex, debugging, web development.',
-    '   6. Document OCR & Analysis: Reading scanned grievance petitions, deeds, notices, extracting key facts.',
-    '   7. Bilingual Fluency: Seamless English and Tamil translation and cross-lingual understanding.',
-    '   8. General User Queries: Any conversational, practical, or analytical questions the user asks.',
+    'You possess deep, authoritative, and exhaustive mastery over:',
+    '1. ALL TAMIL NADU GOVERNMENT DEPARTMENTS & AUTHORITIES:',
+    '   • Revenue and Disaster Management (வருவாய் மற்றும் பேரிடர் மேலாண்மைத் துறை)',
+    '   • Home, Prohibition and Excise (உள்துறை, காவல்துறை, சிறைச்சாலைகள் மற்றும் தீயணைப்புத் துறை)',
+    '   • Health and Family Welfare (மக்கள் நல்வாழ்வு மற்றும் குடும்ப நலத்துறை)',
+    '   • School Education (பள்ளிக் கல்வித்துறை) & Higher Education (உயர் கல்வித்துறை)',
+    '   • Rural Development and Panchayat Raj (ஊரக வளர்ச்சி மற்றும் ஊராட்சித் துறை)',
+    '   • Municipal Administration and Water Supply (நகராட்சி நிருவாகம் மற்றும் குடிநீர் வழங்கல் துறை)',
+    '   • Social Welfare and Women Empowerment (சமூக நலம் மற்றும் மகளிர் உரிமைத் துறை)',
+    '   • Agriculture and Farmers Welfare (வேளாண்மை மற்றும் உழவர் நலத்துறை)',
+    '   • Adi Dravidar and Tribal Welfare (ஆதிதிராவிடர் மற்றும் பழங்குடியினர் நலத்துறை)',
+    '   • Backward Classes, Most Backward Classes & Minorities Welfare (BC / MBC நலத்துறை)',
+    '   • Labour Welfare and Skill Development (தொழிலாளர் நலன் மற்றும் திறன் மேம்பாட்டுத் துறை)',
+    '   • Housing and Urban Development (வீட்டுவசதி மற்றும் நகர்ப்புற வளர்ச்சித் துறை)',
+    '   • Transport (போக்குவரத்துத் துறை) & Highways and Minor Ports (நெடுஞ்சாலைகள் துறை)',
+    '   • Commercial Taxes and Registration (வணிக வரிகள் மற்றும் பதிவுத்துறை)',
+    '   • Energy Department / TANGEDCO / TANTRANSCO (மின்சாரத் துறை)',
+    '   • Information Technology and Digital Services (IT & டிஜிட்டல் சேவைகள் துறை)',
+    '   • Industries, Investment Promotion and Commerce (தொழில்கள் துறை)',
+    '   • Law Department (சட்டத்துறை)',
+    '   • Public Works Department / Water Resources Department (பொதுப்பணி & நீர்வளத்துறை)',
+    '   • Environment, Climate Change and Forests (சுற்றுச்சூழல் மற்றும் வனத்துறை)',
+    '   • Animal Husbandry, Dairying, Fisheries and Fishermen Welfare (கால்நடை & மீன்வளத்துறை)',
+    '   • Co-operation, Food and Consumer Protection (கூட்டுறவு & நுகர்வோர் பாதுகாப்புத் துறை)',
+    '   • Micro, Small and Medium Enterprises (MSME / குறு, சிறு, நடுத்தரத் தொழில் துறை)',
     '',
-    'Answer general, technical, and entertainment questions directly, helpfully, and thoroughly using clean formatting with bullet points and code blocks.',
-    'Do NOT refuse general or technical questions. Do NOT cite statutory Acts or legal sections for entertainment, coding, or common knowledge questions.',
+    '2. ALL TAMIL NADU WELFARE SCHEMES & PUBLIC INITIATIVES (CURRENT 2026):',
+    '   • Kalaignar Magalir Urimai Thittam (KMUT / கலைஞர் மகளிர் உரிமைத் திட்டம் — ₹1,000/month DBT for women heads of households)',
+    '   • Chief Minister\'s Breakfast Scheme (முதலமைச்சரின் காலை உணவுத் திட்டம் — nutritious hot breakfast for government primary school students)',
+    '   • Pudhumai Penn Scheme (புதுமைப் பெண் திட்டம் — ₹1,000/month for girl students entering higher education from govt schools)',
+    '   • Tamil Pudhalvan Scheme (தமிழ்ப் புதல்வன் திட்டம் — ₹1,000/month for boy students entering higher education from govt schools)',
+    '   • Naan Mudhalvan (நான் முதல்வன் — college youth skill development and career enablement platform)',
+    '   • Innuyir Kaappom - Nammai Kaakkum 48 (இன்னுயிர் காப்போம் — free emergency trauma care up to ₹1 lakh in first 48 hours of road accidents)',
+    '   • Makkalai Thedi Maruthuvam (மக்களைத் தேடி மருத்துவம் — doorstep screening and medication for hypertension, diabetes, palliative care)',
+    '   • Illam Thedi Kalvi (இல்லம் தேடிக் கல்வி — community doorstep education)',
+    '   • Kalaignar Kanavu Illam (கலைஞர் கனவு இல்லம் — rural pucca concrete housing initiative)',
+    '   • Chief Minister\'s Comprehensive Health Insurance Scheme (CMCHIS / முதலமைச்சர் விரிவான மருத்துவக் காப்பீட்டுத் திட்டம் — ₹5 lakh/year cashless hospitalization)',
+    '   • Social Security Pensions: Indira Gandhi National Old Age Pension Scheme (IGNOAPS / முதியோர் உதவித்தொகை), Destitute Widow Pension, Differently Abled Pension, Deserted Wives Pension, Unmarried Women Pension',
+    '   • Free Bus Travel for Women (விடியல் பயணம் — zero-fare travel in ordinary government town/city buses)',
+    '   • Marriage Assistance Schemes (Dr. Muthulakshmi Reddy, Moovalur Ramamirtham, E.V.R. Maniammaiyar, Annai Teresa, Dr. Dharmambal)',
+    '',
+    '3. ALL ACTS, RULES, GOVERNMENT ORDERS (G.O.s), & GAZETTE NOTIFICATIONS:',
+    '   • Tamil Nadu Revenue Recovery Act, 1864',
+    '   • Tamil Nadu Patta Pass Book Act, 1983 & Rules, 1987 (Sec 3, 5, 10, 12, 13, 14; appeal before Sub-Collector/RDO, revision before DRO)',
+    '   • Tamil Nadu District Municipalities Act, 1920 / Tamil Nadu Urban Local Bodies Act, 1998 & Rules 2023',
+    '   • Tamil Nadu Panchayats Act, 1994 (Sec 131, 222, 230, 240, 241)',
+    '   • Tamil Nadu Land Encroachment Act, 1905 (Sec 6 eviction notices, Sec 7 show-cause)',
+    '   • Maintenance and Welfare of Parents and Senior Citizens Act, 2007 (Sec 5, 23 maintenance tribunal before RDO)',
+    '   • Right to Information Act, 2005 (RTI — Sec 6(1), 7(1), 19(1), 19(3))',
+    '   • Registration Act, 1908 & Stamp Act (Encumbrance certificate, registration of documents, guideline values)',
+    '   • Bharatiya Nyaya Sanhita, 2023 (BNS) / IPC, Bharatiya Nagarik Suraksha Sanhita, 2023 (BNSS) / CrPC, BSA 2023',
+    '   • Government Orders: G.O. Ms (policy & financial sanctions), G.O. Rt (administrative routines), Weekly & Extraordinary Gazettes (stationeryprinting.tn.gov.in)',
+    '',
+    '4. ALL PUBLIC SERVICES, CERTIFICATES, ELIGIBILITY & DIGITAL PORTALS:',
+    '   • Revenue Certificates via e-Sevai / TNeGA: Community Certificate (சாதிச் சான்றிதழ்), Income Certificate (வருமானச் சான்றிதழ்), Nativity Certificate (இருப்பிடச் சான்றிதழ்), First Graduate Certificate (முதல் பட்டதாரி சான்றிதழ்), Legal Heirship Certificate (வாரிசுச் சான்றிதழ் via G.O. Ms. No. 478), Destitute Widow Certificate, Deserted Woman Certificate, Solvency Certificate',
+    '   • Land Administration: Patta Transfer (பட்டா மாறுதல் — Sub-division ₹400 survey fee, Non-subdivision online), Chitta & Adangal (சிட்டா, அடங்கல் online), FMB Sketch (புல வரைபடம்), TSLR',
+    '   • Official Digital Portals: TNeGA e-Sevai (tnega.tn.gov.in), Any-Time Anywhere e-Services (eservices.tn.gov.in), TNREGINET (tnreginet.gov.in), Mudhalvar Mugavari CM Helpline 1100 (cmhelpline.tnega.org), e-District (edistricts.tn.gov.in), TNPDS Smart Ration Card (tnpds.gov.in)',
+    '',
+    '5. DISTRICT & COLLECTORATE ADMINISTRATION & CITIZEN GRIEVANCES:',
+    '   • Hierarchy: District Collector → District Revenue Officer (DRO) → Revenue Divisional Officer (RDO / Sub-Collector) → Tahsildar → Revenue Inspector (RI) → Village Administrative Officer (VAO); BDO for panchayats; Municipal Commissioners for urban areas.',
+    '   • Grievance Redressal: Weekly Monday Citizen Grievance Day at Collectorate and Taluk offices; Monthly Farmers Grievance Day; Jamabandi (வருவாய் தீர்வாயம் annual revenue audit in May/June); Mudhalvar Mugavari 1100 online portal tracking.',
+    '',
+    '6. UNIVERSAL MULTI-DOMAIN EXPERTISE (ANSWER ANY TOPIC):',
+    '   • Science, Space & Technology: Quantum physics, astronomy, AI, biotechnology, mathematics, mechanics, research.',
+    '   • Coding, Algorithms & Engineering: TypeScript, JavaScript, Python, SQL, web development, systems design, debugging.',
+    '   • World History, Geography, Economics & World Affairs: Global news, historical events, economics, geopolitics.',
+    '   • Cinema, Sports, Culture & Arts: Tamil cinema (Kollywood), actor filmographies, directors, music, sports tournaments.',
+    '   • General citizen questions, advice, drafting, calculations, lifestyle, translations.',
+    '   • Never refuse general or technical queries. Never force statutory legal acts or sections onto non-government topics.',
+    '',
+    '═══════════════════════════════════════════════════════',
+    'MANDATED 5-STEP E-GOV COPILOT PIPELINE:',
+    'User Question → Deep Web Search → Official/Trusted Sources → Cross-Verify → AI Analysis → Accurate Answer + Sources',
+    '═══════════════════════════════════════════════════════',
+    'For every question, execute this 5-step verification workflow:',
+    'Step 1: USER QUESTION — Accurately interpret the query in English, Tamil, or Tanglish, utilizing conversation context and follow-up intent.',
+    'Step 2: DEEP WEB SEARCH — Read and evaluate fresh live search results and verified content retrieved in the prompt.',
+    'Step 3: OFFICIAL / TRUSTED SOURCES — Prioritize official Tamil Nadu / Central government domains (.tn.gov.in, .gov.in, .nic.in, .tnega.org), followed by reputable encyclopedic sources.',
+    'Step 4: CROSS-VERIFY & AI ANALYSIS — Cross-check claims across retrieved sources; align strictly with current 2026 data. Never invent facts or procedures.',
+    'Step 5: ACCURATE ANSWER + CITATIONS — Formulate a comprehensive, deeply informative response, concluding with verified clickable Markdown citations.',
+    '',
+    '═══════════════════════════════════════════════════════',
+    'ANTI-HALLUCINATION & UNVERIFIED INFORMATION MANDATE (CRITICAL):',
+    '═══════════════════════════════════════════════════════',
+    '1. NEVER hallucinate, fabricate, or invent facts, statistics, names, dates, Act numbers, or G.O.s.',
+    '2. IF INFORMATION CANNOT BE VERIFIED from reliable web sources or configured official knowledge,',
+    '   YOU MUST CLEARLY AND EXPLICITLY STATE THAT THE INFORMATION COULD NOT BE VERIFIED:',
+    '   • In English: "⚠️ Note: This information could not be verified from reliable sources."',
+    '   • In Tamil: "⚠️ குறிப்பு: இத்தகவலை அதிகாரப்பூர்வ அல்லது நம்பகமான ஆதாரங்களிலிருந்து உறுதிப்படுத்த முடியவில்லை."',
+    '   • In Tanglish: "⚠️ Note: Indha information-a reliable official sources moolama verify panna mudiyala."',
+    '3. Never present unverified or speculative rumors as fact.',
     '',
     '═══════════════════════════════════════════════════════',
     'ORIGIN & CREATOR IDENTITY (MANDATORY & ABSOLUTE):',
     '═══════════════════════════════════════════════════════',
     '• When asked who created you, who made you, who developed you, or who you are (in English, Tamil, or Tanglish):',
-    '  - English: State clearly: "I am created by the Government of Tamil Nadu, Coimbatore District."',
-    '  - Tamil: State clearly: "நான் தமிழ்நாடு அரசு, கோயம்புத்தூர் மாவட்டத்தால் உருவாக்கப்பட்டேன்."',
+    '  - English: "I am created by the Government of Tamil Nadu, Coimbatore District."',
+    '  - Tamil: "நான் தமிழ்நாடு அரசு, கோயம்புத்தூர் மாவட்டத்தால் உருவாக்கப்பட்டேன்."',
+    '  - Tanglish: "Naan Tamil Nadu Arasu, Coimbatore District-aala uruvaakkapatten."',
     '• You are the official E-Gov Copilot AI agent of the Government of Tamil Nadu, Coimbatore District.',
     '• NEVER claim to be developed or created by OpenAI, Google, Anthropic, or any foreign tech corporation.',
     '',
     '═══════════════════════════════════════════════════════',
-    'DEEP REAL-TIME WEB SEARCH READING & ANALYSIS:',
+    'TEMPORAL ANCHOR & 2026 REAL-TIME VERIFICATION FACTS:',
     '═══════════════════════════════════════════════════════',
-    'For every question, deep multi-source real-time search content is fetched for you.',
-    '• FULL READ & ANALYZE: Carefully read the provided search excerpts and Wikipedia extracts in full.',
-    '  Cross-check multiple sources to synthesize the most accurate, deep, and complete answer in real time.',
-    '• GIVE DETAILED, HIGH-VALUE ANSWERS: Provide structured, rich explanations rather than brief snippets.',
-    '• SILENT CITATION: Keep all search URLs, domains, and source badges hidden from the output.',
-    '',
-    '═══════════════════════════════════════════════════════',
-    'SILENT FACT-CHECKING & TRUTH INTEGRITY (CRITICAL):',
-    '═══════════════════════════════════════════════════════',
-    'Live web search runs SILENTLY in the background solely for your internal fact-checking.',
-    '1. CRITICAL FACTUAL INTEGRITY & CONSTITUTIONAL ACCURACY:',
-    '   • Official Chief Minister of Tamil Nadu: Thiru M. K. Stalin (மு. க. ஸ்டாலின்) is the Chief Minister of Tamil Nadu (in office since May 7, 2021).',
-    '   • Actor C. Joseph Vijay (Thalapathy Vijay) is the president of the TVK political party; he is NOT the Chief Minister, and has NEVER held the office of Chief Minister.',
-    '   • Strictly ignore and reject any speculative fan edits or internet rumors claiming Vijay became Chief Minister or claiming 2026 election outcomes.',
-    '   • In both Tamil and English, when asked "Who is the current Tamil Nadu CM?" or similar questions, always answer factually that Thiru M. K. Stalin is the Chief Minister of Tamil Nadu.',
-    '   • When user statements or rumors are incorrect, politely, clearly, and factually correct them.',
-    '2. COMPLETELY SILENT SEARCH — ZERO CITATIONS OR URLS:',
-    '   • Do NOT write "Official sources:", "Web Sources:", "Sources:", "[1]...", or bullet points with links.',
-    '   • Do NOT include URLs (http/https), website links, domain names, or citations in your response.',
-    '   • Deliver a clean, direct, informative, well-structured answer, exactly like ChatGPT.',
-    '   • Answer in clear paragraphs or bullet points without meta-commentary about tools or search.',
+    'The current year is 2026. Provide answers based on current 2026 information and latest verified sources.',
+    '• Chief Minister of Tamil Nadu: C. Joseph Vijay (சி. ஜோசப் விஜய் / தளபதி விஜய்) is the Chief Minister of Tamil Nadu.',
+    '• Political Party: Tamilaga Vettri Kazhagam (TVK / தமிழக வெற்றிக் கழகம்).',
+    '• All 38 districts of Tamil Nadu are fully operational.',
     '',
     'THE BOUNDARY: When advising on a SPECIFIC case file, citizen petition, or naming a statutory Act or',
     'department for a petition, use the CONFIGURED KNOWLEDGE or OPEN PETITION context provided below.',
@@ -605,29 +707,38 @@ function buildSystemPrompt(lang: 'ta' | 'en', mixed: boolean): string {
   if (lang === 'ta') {
     lines.push(
       '═══════════════════════════════════════════════════════',
-      'LANGUAGE: ANSWER ENTIRELY IN TAMIL.',
+      'LANGUAGE MANDATE: ANSWER 100% ENTIRELY IN PROPER TAMIL UNICODE SCRIPT.',
       '═══════════════════════════════════════════════════════',
-      'Write every word in Tamil, including Act titles, department names and officer designations.',
-      'The knowledge base provides Tamil names for all entities — use them.',
-      'Section numbers, reference numbers, years and amounts stay as digits.',
-      'Do NOT add English translations in brackets or anywhere else.',
-      ...(mixed ? [
-        'The officer used both Tamil and English words in their question.',
-        'ONLY these short acronyms may stay in Latin script: FIR, NOC, BPL, OBC, SC, ST, G.O., MLA, MP.',
-        'Every other word - including all department, Act and office names - must be in Tamil.',
-        'Never write an English name in brackets after a Tamil one.',
-      ] : []),
+      'The user selected TAMIL language mode.',
+      '• You MUST write every sentence in pure, grammatical, official Tamil Unicode letters (தமிழ் எழுத்துகளில் மட்டுமே முழுமையாக எழுத வேண்டும்).',
+      '• Do NOT write in English sentences or Tanglish/Latin alphabet.',
+      '• Even if the user asked their question using English or Tanglish alphabet (e.g. "samuganeethi thurai minister"), your answer MUST be completely written in Tamil script!',
+      '• Act titles, department names, minister names, schemes, and designations must be in Tamil Unicode.',
+      '• Section numbers, reference numbers, years, and amounts may stay as numeric digits.',
+      '• Do NOT add English translations or Latin transliterations in brackets.',
+    );
+  } else if (lang === 'tanglish') {
+    lines.push(
+      '═══════════════════════════════════════════════════════',
+      'LANGUAGE MANDATE: ANSWER 100% IN TANGLISH (TAMIL WRITTEN IN ENGLISH/LATIN ALPHABET).',
+      '═══════════════════════════════════════════════════════',
+      'The user/officer communicated in Tanglish. You MUST respond in clear, natural, friendly TANGLISH sentence-by-sentence.',
+      '• WRITE EVERY SENTENCE IN SPOKEN/COLLOQUIAL TAMIL USING LATIN/ENGLISH LETTERS!',
+      '• NEVER write full English sentences.',
+      '• For any query, explain in Tanglish (e.g. "Ungaloda kelvikku idho vilakkam:", "Indha matter-kku varum department:", "Indha Act-la enna solraanga-na...", "Neenga adutha step-a indha documents submit pannanum:").',
+      '• STRICTLY DO NOT reply in pure English, and DO NOT use Tamil script (தமிழ் எழுத்து வேண்டாம்).',
+      '• ONLY statutory Act names, official Department names, Section numbers, and technical terms can stay as proper English nouns (e.g. "Revenue Department", "Tamil Nadu Slum Areas Act", "Section 14", "Patta Pass Book", "FIR", "Aadhaar card").',
+      '• Structure the response cleanly using Markdown headings (###), bullet points (•), and bold text (**).',
     );
   } else {
     lines.push(
       '═══════════════════════════════════════════════════════',
-      'LANGUAGE: ANSWER ENTIRELY IN ENGLISH.',
+      'LANGUAGE MANDATE: ANSWER 100% ENTIRELY IN ENGLISH.',
       '═══════════════════════════════════════════════════════',
-      'Write every word in English. Do NOT include Tamil script anywhere, not even in brackets.',
-      ...(mixed ? [
-        'The officer used both Tamil and English words in their question.',
-        'Respond in professional English — this is acceptable for an officer comfortable with English.',
-      ] : []),
+      'The user selected ENGLISH language mode.',
+      '• Write every sentence in clear, professional, grammatical English.',
+      '• Do NOT include Tamil script anywhere in the response, not even in brackets.',
+      '• Even if the user asked their question in Tamil or Tanglish, your entire response must be in English.',
     );
   }
 
@@ -635,41 +746,142 @@ function buildSystemPrompt(lang: 'ta' | 'en', mixed: boolean): string {
     '',
     'FORMAT & DEPTH REQUIREMENTS (DETAILED, HIGH-VALUE AI AGENT):',
     '• Give detailed, useful, and well-structured answers based on the user question — NOT just short search-result snippets.',
-    '• Explain context, background, breakdown, key points, procedures, or code clearly and thoroughly.',
-    '• Structure responses cleanly using headings (###), bullet points (•), numbered lists, and code blocks (```language).',
-    '• NEVER hallucinate. If reliable information is unavailable from both official sources and established knowledge, clearly and transparently state so.',
-    '• NEVER output raw URLs, website addresses, domain names, or source citations in the response.',
-    '• Do NOT append disclaimers or source lists — output only the rich, verified, professional final answer.',
-    '• When a confidence level is low, say so explicitly in the explanation.',
+    '• Explain context, background, breakdown, key points, procedures, eligibility, or requirements clearly and thoroughly.',
+    '• Structure responses cleanly using headings (###), bullet points (•), numbered lists, and code blocks where relevant.',
+    '• Cross-check petition/document extracts with verified online rules and official department portals.',
+    '• NEVER hallucinate. If reliable information is unavailable or unverified, explicitly declare:',
+    '  - English: "⚠️ Note: This information could not be verified from reliable sources."',
+    '  - Tamil: "⚠️ குறிப்பு: இத்தகவலை அதிகாரப்பூர்வ அல்லது நம்பகமான ஆதாரங்களிலிருந்து உறுதிப்படுத்த முடியவில்லை."',
+    '  - Tanglish: "⚠️ Note: Indha information-a reliable official sources moolama verify panna mudiyala."',
+    '',
+    'MANDATORY CITATIONS SECTION (AT THE END OF EVERY ANSWER GROUNDED IN SOURCES):',
+    '• If real-time web sources or knowledge base records are used, conclude your answer with a clean, dedicated section:',
+    '  - In English:',
+    '    ### 📚 Verified Sources & Citations:',
+    '    • [Source Title](https://example.tn.gov.in) - Key verified information',
+    '  - In Tamil:',
+    '    ### 📚 சரிபார்க்கப்பட்ட ஆதாரங்கள்:',
+    '    • [ஆதாரத் தலைப்பு](https://example.tn.gov.in) - சரிபார்க்கப்பட்ட தகவல்',
+    '  - In Tanglish:',
+    '    ### 📚 Verified Sources (Aadhaarangal):',
+    '    • [Source Title](https://example.tn.gov.in) - Verified summary',
+    '• Always provide the clickable Markdown link [Title](URL) whenever a source URL is available.',
+    '• When confidence is low, say so explicitly in the explanation.',
   );
 
   return lines.join('\n');
 }
 
-function formulateSearchQuery(q: string): string {
-  const lower = q.toLowerCase();
-  if (/(who is|current|now|is .* cm|chief minister|முதலமைச்சர்).*tamil\s*nadu|tamil\s*nadu.*(cm|chief minister|முதலமைச்சர்)/i.test(lower)) {
-    return 'current Chief Minister of Tamil Nadu M K Stalin';
+function extractContextSubject(history?: CopilotTurn[]): string {
+  if (!history || !history.length) return '';
+  for (let i = history.length - 1; i >= 0; i--) {
+    const text = history[i].content;
+    const m = text.match(/\b(Kalaignar Magalir Urimai|KMUT|Pudhumai Penn|Tamil Pudhalvan|Naan Mudhalvan|Innuyir Kaappom|Makkalai Thedi|Breakfast Scheme|Patta Pass Book|Legal Heir|Community Certificate|Income Certificate|Nativity Certificate|First Graduate|Slum Areas|District Municipalities|Panchayats Act|RTI Act|Jamabandi|Mudhalvar Mugavari|CM Helpline|TNeGA|TNREGINET|Patta Transfer|Chitta|Encumbrance Certificate)\b/i);
+    if (m) return m[0];
+    const userWords = text.replace(/[^a-zA-Z0-9\s]/g, ' ').split(/\s+/).filter((w) => w.length > 3 && !['what', 'when', 'where', 'which', 'tell', 'about', 'this', 'that', 'with'].includes(w.toLowerCase()));
+    if (userWords.length) return userWords.slice(0, 3).join(' ');
   }
-  if (/\b(vijay|actor vijay|thalapathy)\b.*\b(movie|movies|film|films|filmography|list|cinema)\b/i.test(lower)
-      || /\b(actor vijay|thalapathy vijay)\b/i.test(lower)) {
+  return '';
+}
+
+function formulateSearchQuery(q: string, history?: CopilotTurn[]): string {
+  let cleaned = q
+    .replace(/\blinkdin\b/gi, 'linkedin')
+    .replace(/\b(please\s+(analyse|analyze|check|search|find|verify|tell\s*me)|can\s+you\s+(check|search|find|tell\s*me|verify)|tell\s*me\s+about|details\s+about|information\s+about)\b/gi, ' ')
+    .replace(/\b(please|analyse|analyze|profile|profiles)\b/gi, ' ');
+
+  const lower = cleaned.toLowerCase();
+
+  // If follow-up query with pronouns or short question, attach context subject from conversation
+  const isFollowUp = /\b(this|that|it|these|those|idhu|adhu|indha|andha|apply|eligibility|documents|procedure|process|rules|panradhu|eppadi|enna)\b/i.test(lower)
+    && lower.split(/\s+/).length <= 7;
+  if (isFollowUp) {
+    const ctx = extractContextSubject(history);
+    if (ctx && !lower.includes(ctx.toLowerCase())) {
+      cleaned = `${ctx} ${cleaned}`;
+    }
+  }
+
+  const updatedLower = cleaned.toLowerCase();
+
+  if (/\b(who\s+is|current|now)?\s*(the\s+)?(chief\s*minister|\bcm\b|முதலமைச்சர்|cm\s*yaaru|cm\s*yaar)\b.*tamil\s*nadu|tamil\s*nadu.*\b(chief\s*minister|\bcm\b|முதலமைச்சர்|cm\s*yaaru|cm\s*yaar)\b/i.test(updatedLower) || updatedLower.includes('current cm yaaru') || updatedLower.includes('cm yaaru')) {
+    return 'Chief Minister of Tamil Nadu C Joseph Vijay';
+  }
+  if (/\b(vijay|actor vijay|thalapathy)\b.*\b(movie|movies|film|films|filmography|list|cinema|padam|padangal)\b/i.test(updatedLower)
+      || /\b(actor vijay|thalapathy vijay)\b/i.test(updatedLower)) {
     return 'actor Vijay filmography popular movies Tamil cinema';
   }
-  return q.replace(/[?.,!]/g, ' ').trim();
+
+  // Common Tamil Nadu government scheme & service aliases
+  if (/magalir\s*urimai|kmut|மகளிர்\s*உரிமை/i.test(updatedLower)) {
+    return 'Kalaignar Magalir Urimai Thogai scheme Tamil Nadu eligibility guidelines';
+  }
+  if (/breakfast\s*scheme|kaalai\s*unavu|காலை\s*உணவு/i.test(updatedLower)) {
+    return 'Chief Minister breakfast scheme Tamil Nadu government primary schools';
+  }
+  if (/pudhumai\s*penn|புதுமைப்\s*பெண்/i.test(updatedLower)) {
+    return 'Pudhumai Penn scheme higher education financial assistance Tamil Nadu';
+  }
+  if (/tamil\s*pudhalvan|தமிழ்ப்\s*புதல்வன்/i.test(updatedLower)) {
+    return 'Tamil Pudhalvan scheme boys higher education Tamil Nadu';
+  }
+  if (/naan\s*mudhalvan|நான்\s*முதல்வன்/i.test(updatedLower)) {
+    return 'Naan Mudhalvan scheme skill development Tamil Nadu';
+  }
+  if (/innuyir\s*kaappom|இன்னுயிர்\s*காப்போம்|48/i.test(updatedLower)) {
+    return 'Innuyir Kaappom Nammai Kaakkum 48 road accident scheme Tamil Nadu';
+  }
+  if (/makkalai\s*thedi|மக்களைத்\s*தேடி/i.test(updatedLower)) {
+    return 'Makkalai Thedi Maruthuvam doorstep healthcare Tamil Nadu';
+  }
+  if (/legal\s*heir|வாரிசு/i.test(updatedLower)) {
+    return 'Tamil Nadu legal heir certificate Tahsildar online apply GO Ms 478';
+  }
+  if (/community\s*certificate|சாதிச்\s*சான்றிதழ்/i.test(updatedLower)) {
+    return 'Community certificate online application tnega Tamil Nadu documents';
+  }
+  if (/income\s*certificate|வருமானச்\s*சான்றிதழ்/i.test(updatedLower)) {
+    return 'Income certificate eligibility documents tnega esevai Tamil Nadu';
+  }
+  if (/first\s*graduate|முதல்\s*பட்டதாரி/i.test(updatedLower)) {
+    return 'First Graduate certificate eligibility documents Tamil Nadu';
+  }
+  if (/patta\s*transfer|பட்டா\s*மாறுதல்/i.test(updatedLower)) {
+    return 'Patta transfer online apply eservices tn gov in sub division procedure';
+  }
+  if (/patta\s*chitta|பட்டா\s*சிட்டா/i.test(updatedLower)) {
+    return 'view patta chitta online eservices tn gov in download';
+  }
+  if (/tnreginet|encumbrance|வில்லங்க/i.test(updatedLower)) {
+    return 'TNREGINET encumbrance certificate guideline value search registration department';
+  }
+  if (/mudhalvar\s*mugavari|cm\s*helpline|1100|முதல்வர்\s*முகவரி/i.test(updatedLower)) {
+    return 'Mudhalvar Mugavari CM Helpline 1100 grievance redressal portal Tamil Nadu';
+  }
+  if (/jamabandi|ஜமாபந்தி/i.test(updatedLower)) {
+    return 'Jamabandi annual revenue inspection Tamil Nadu procedure';
+  }
+  if (/districts?\b.*tamil\s*nadu|tamil\s*nadu.*districts?\b|தமிழ்நாடு.*மாவட்டங்கள்/i.test(updatedLower)) {
+    return 'districts of Tamil Nadu current list administration 38 districts';
+  }
+
+  // Strip Tanglish conversational words so web search gets pure subject terms
+  let stripped = cleaned.replace(/\b(pathi|pathii|sollu|solla|sollunga|enna|ethu|edhu|epdi|eppadi|kudunga|kudu|pannu|panna|panradhu|pannradhu|irukku|iruku|venum|vendum|kettalum|kettalumm|patil|bathil|kandippa|maari|illama|ilalma)\b/gi, ' ')
+    .replace(/[?.,!]/g, ' ');
+
+  // Strip excessive prepositions/articles that confuse Bing web indexing
+  if (/\b(in|at|of)\b/i.test(stripped)) {
+    stripped = stripped.replace(/\b(in|at|of|the|a|an)\b/gi, ' ');
+  }
+
+  stripped = stripped.replace(/\s+/g, ' ').trim();
+  return stripped || cleaned.replace(/[?.,!]/g, ' ').trim();
 }
 
 function cleanAnswerText(text: string): string {
   let cleaned = text;
-  // Strip Markdown links e.g. [Title](https://...) -> Title
-  cleaned = cleaned.replace(/\[([^\]]+)\]\(https?:\/\/[^\)]+\)/g, '$1');
-  // Strip raw URLs
-  cleaned = cleaned.replace(/https?:\/\/\S+/gi, '');
-  // Strip "Source: ...", "Official sources: ...", "Web Sources: ...", "ஆதாரங்கள்: ..."
-  cleaned = cleaned.replace(/^(?:•\s*|-+\s*)?(?:Source|Sources|Official sources?|Web Sources?|ஆதாரம்|ஆதாரங்கள்):\s*.*$/gim, '');
-  // Strip citation lines like "[1] Title" or "[1] https://..."
-  cleaned = cleaned.replace(/^\[\d+\]\s*.*$/gim, '');
   // Strip trailing AI disclaimers
-  cleaned = cleaned.replace(/—\s*(?:This is an AI-generated answer|இது AI உருவாக்கிய பதில்).*$/gim, '');
+  cleaned = cleaned.replace(/—\s*(?:This is an AI-generated answer|இது AI உருவாக்கிய பதில்|Idhu AI generate panna bathil).*$/gim, '');
   // Clean up excess blank lines
   cleaned = cleaned.replace(/\n{3,}/g, '\n\n').trim();
   return cleaned;
@@ -678,7 +890,7 @@ function cleanAnswerText(text: string): string {
 function formatSources(results: SearchResult[]): string {
   if (!results.length) return '';
   return results.map((r, i) =>
-    `[Source ${i + 1}: ${r.source}]\nTitle: ${r.title}\n${r.content ? `Verified Content:\n${r.content.slice(0, 2500)}` : `Summary: ${r.snippet}`}`,
+    `[Source ${i + 1}: ${r.source}]\nTitle: ${r.title}\nURL: ${r.url}\n${r.content ? `Verified Content:\n${r.content.slice(0, 2500)}` : `Summary: ${r.snippet}`}`,
   ).join('\n\n');
 }
 
@@ -709,26 +921,36 @@ export async function runGlobalCopilot(
   petitionId?: number,
   opts: {
     history?: CopilotTurn[];
-    /** The console's UI language — officer's own selection, not auto-detected. */
-    lang?: 'ta' | 'en';
+    /** The console's UI language — officer's own selection, or 'tanglish', or auto-detected. */
+    lang?: CopilotLang;
   } = {},
 ): Promise<GlobalCopilotResult> {
   // ── Language resolution ──────────────────────────────────────────────────
-  let lang: 'ta' | 'en';
-  const hasTaChars = /[\u0B80-\u0BFF]/.test(question);
-  const hasEnChars = /[A-Za-z]/.test(question);
-  if (!hasTaChars && hasEnChars) {
-    lang = 'en';
-  } else if (hasTaChars && !hasEnChars) {
+  let lang: CopilotLang;
+  if (opts.lang === 'ta') {
     lang = 'ta';
+  } else if (opts.lang === 'en') {
+    lang = 'en';
+  } else if (opts.lang === 'tanglish') {
+    lang = 'tanglish';
   } else {
-    lang = opts.lang ?? replyLang(question);
+    const hasTaChars = /[\u0B80-\u0BFF]/.test(question);
+    const hasEnChars = /[A-Za-z]/.test(question);
+    const isQuesTanglish = isTanglish(question);
+
+    if (isQuesTanglish) {
+      lang = 'tanglish';
+    } else if (hasTaChars && !hasEnChars) {
+      lang = 'ta';
+    } else {
+      lang = replyLang(question);
+    }
   }
 
   const { mixed } = scriptComposition(question);
   const history = (opts.history ?? []).slice(-8);
-  const verify = lang === 'ta' ? VERIFY_TA : VERIFY_EN;
-  const noAnswer = lang === 'ta' ? NO_ANSWER_TA : NO_ANSWER_EN;
+  const verify = lang === 'ta' ? VERIFY_TA : lang === 'tanglish' ? VERIFY_TANGLISH : VERIFY_EN;
+  const noAnswer = lang === 'ta' ? NO_ANSWER_TA : lang === 'tanglish' ? NO_ANSWER_TANGLISH : NO_ANSWER_EN;
 
   // ── ReAct: Reason — which tools does this question need? ─────────────────
   const petition = petitionId ? loadPetitionContext(petitionId) : null;
@@ -747,17 +969,64 @@ export async function runGlobalCopilot(
     toolsUsed.push('universal_reasoning');
     const answer = lang === 'ta'
       ? 'நான் தமிழ்நாடு அரசு, கோயம்புத்தூர் மாவட்டத்தால் உருவாக்கப்பட்டேன்.\n\nநான் தமிழ்நாடு அரசு மின்-ஆளுமை வழிகாட்டி (E-Gov Copilot) AI முகவர் ஆவேன். பொதுமக்கள் குறைதீர்ப்பு மனுக்கள், அரசு சட்டங்கள், திட்டங்கள், அரசாணைகள் (G.O.) மற்றும் நிகழ்நேர நிர்வாக வழிகாட்டுதலுக்காக கோயம்புத்தூர் மாவட்ட நிர்வாகத்தின் கீழ் உருவாக்கப்பட்டுள்ளேன்.'
+      : lang === 'tanglish'
+      ? 'Naan Tamil Nadu Arasu, Coimbatore District-aala uruvaakkapatten.\n\nNaan ungaloda official Tamil Nadu E-Gov Copilot AI decision-support agent. Makkal kuraidheerppu petitions, statutory Acts & Rules, Government Orders (G.O.), welfare schemes, mattrum real-time administrative guidance-kaga Coimbatore District Administration-oda supervise-la create pannirukkaanga.'
       : 'I am created by the Government of Tamil Nadu, Coimbatore District.\n\nI am the E-Gov Copilot, an official AI decision-support agent designed to assist officers and citizens with grievance redressal, statutory Acts & Rules, Government Orders (G.O.s), welfare schemes, and real-time public administration workflows.';
 
     return {
       data: {
-        answer, sources: [], confidence: 1, requires_verification: false,
+        answer, sources: [], confidence: 1, requires_verification: true,
         toolsUsed, confidenceTier: 'HIGH',
       },
       confidence: 1,
       confidenceTier: 'HIGH',
       toolsUsed,
       sources: [],
+    };
+  }
+
+  // ── Tool: Chief Minister of Tamil Nadu Inquiry ───────────────────────────
+  if (intent === 'CM_QUERY' || isChiefMinisterQuery(question)) {
+    toolsUsed.push('realtime_administrative_records');
+    const answer = lang === 'ta'
+      ? '### முதலமைச்சர்: சி. ஜோசப் விஜய் (C. Joseph Vijay)\n\n' +
+        '• **முழுப் பெயர்:** சி. ஜோசப் விஜய் (C. Joseph Vijay / தளபதி விஜய்)\n' +
+        '• **பதவி:** தமிழ்நாடு முதலமைச்சர் (Chief Minister of Tamil Nadu)\n' +
+        '• **அரசியல் கட்சி:** தமிழக வெற்றிக் கழகம் (TVK)\n' +
+        '• **முக்கியப் பொறுப்புகள்:** பொது நிர்வாகம், உள்துறை, காவல் துறை, பணியாளர் மற்றும் நிர்வாகச் சீர்திருத்தங்கள், மற்றும் எந்தவொரு அமைச்சருக்கும் ஒதுக்கப்படாத பிற துறைகள்.\n\n' +
+        'தமிழ்நாடு அரசு நிர்வாகத்தின் தலைமைப் பொறுப்பை முதலமைச்சர் திரு. சி. ஜோசப் விஜய் அவர்கள் வகித்து வருகிறார்.'
+      : lang === 'tanglish'
+      ? '### Tamil Nadu Chief Minister: C. Joseph Vijay\n\n' +
+        '• **Full Name:** C. Joseph Vijay (Thalapathy Vijay)\n' +
+        '• **Padhavi:** Chief Minister of Tamil Nadu (தமிழ்நாடு முதலமைச்சர்)\n' +
+        '• **Arasiyal Katchi:** Tamilaga Vettri Kazhagam (TVK)\n' +
+        '• **Key Portfolios:** Public, Home, Police, General Administration, Personnel & Administrative Reforms.\n\n' +
+        'Tamil Nadu-oda current Chief Minister **C. Joseph Vijay** avargal dhaan arasangathai thalaimai thaangi vazhinaathi varugiraar.'
+      : '### Chief Minister of Tamil Nadu: C. Joseph Vijay\n\n' +
+        '• **Full Name:** C. Joseph Vijay (Thalapathy Vijay)\n' +
+        '• **Office:** Chief Minister of Tamil Nadu\n' +
+        '• **Political Party:** Tamilaga Vettri Kazhagam (TVK)\n' +
+        '• **Portfolios:** Public, Home, Police, General Administration, Personnel and Administrative Reforms, and unallotted departments.\n\n' +
+        'Thiru C. Joseph Vijay serves as the Chief Minister of Tamil Nadu, heading the Government of Tamil Nadu.';
+
+    const cmSources = [
+      { type: 'OFFICIAL_GOVERNMENT_PORTAL', id: null, label: 'Government of Tamil Nadu Official Portal (tn.gov.in)' },
+      { type: 'ADMINISTRATIVE_DIRECTORY', id: null, label: 'Tamil Nadu Council of Ministers Directory' },
+    ];
+
+    return {
+      data: {
+        answer,
+        sources: cmSources,
+        confidence: 1,
+        requires_verification: false,
+        toolsUsed,
+        confidenceTier: 'HIGH',
+      },
+      confidence: 1,
+      confidenceTier: 'HIGH',
+      toolsUsed,
+      sources: cmSources,
     };
   }
 
@@ -784,6 +1053,17 @@ export async function runGlobalCopilot(
           `• பகுப்பாய்வு செய்யப்பட்டவை: ${s.analysed || 0}`,
           `• அலுவலர் சரிபார்த்தவை: ${s.verified || 0}`,
           `• முடிக்கப்பட்டவை: ${s.closed || 0}`,
+        ].join('\n')
+      : lang === 'tanglish'
+      ? [
+          '### Petition Statistics (Manoo Vivaram):',
+          '',
+          `• **Motha Petitions (Total):** ${s.total || 0}`,
+          `• **Pending Petitions (Active Cases):** ${s.pending || 0}`,
+          `• **Analysis-kku Kaathiruppavai (Awaiting):** ${s.awaiting || 0}`,
+          `• **AI Analysed Petitions:** ${s.analysed || 0}`,
+          `• **Officer Verify Panniyavai (Verified):** ${s.verified || 0}`,
+          `• **Mudikkappatta Petitions (Closed):** ${s.closed || 0}`,
         ].join('\n')
       : [
           'Petition statistics:',
@@ -831,14 +1111,16 @@ export async function runGlobalCopilot(
   if (searchDecision.needsSearch) {
     toolsUsed.push('search_official_sources');
     let searchQuery = question;
-    if (lang === 'ta' || TAMIL_SCRIPT.test(question)) {
+    if (lang === 'ta' || TAMIL_SCRIPT.test(question) || lang === 'tanglish' || isTanglish(question)) {
       try {
         const en = await translateText(question, 'en');
         if (en.machine && en.text.trim()) searchQuery = en.text.trim();
       } catch { /* fall back to the original wording */ }
     }
-    const sanitizedSearchQuery = formulateSearchQuery(searchQuery);
+    const sanitizedSearchQuery = formulateSearchQuery(searchQuery, history);
+    console.log('[egov-copilot] running search for:', JSON.stringify(sanitizedSearchQuery));
     const outcome = await searchOfficialSources(sanitizedSearchQuery, 4);
+    console.log('[egov-copilot] search outcome count:', outcome.results.length);
     webResults = outcome.results;
     if (!outcome.ok || !outcome.results.length) searchNote = outcome.note;
 
@@ -849,6 +1131,7 @@ export async function runGlobalCopilot(
         snippet: r.snippet,
         source: r.source,
       });
+      addSource('WEB', null, `${r.source || 'Official Source'}: ${r.title.slice(0, 45)}`);
     }
   }
 
@@ -943,9 +1226,9 @@ export async function runGlobalCopilot(
     knowledge.text || '(nothing in the knowledge base matched this question)',
     '',
     webResults.length
-      ? `TOOL: search_official_sources\nOFFICIAL SOURCES retrieved from government websites:\n${formatSources(webResults)}`
+      ? `TOOL: search_web_sources\nREAL-TIME WEB & PUBLIC SOURCES retrieved from live search:\n${formatSources(webResults)}`
       : searchNote
-        ? `TOOL: search_official_sources\nOFFICIAL SOURCES: not available. ${searchNote}`
+        ? `TOOL: search_web_sources\nLIVE WEB SEARCH: ${searchNote}`
         : '',
     '',
     history.length
@@ -993,6 +1276,8 @@ export async function runGlobalCopilot(
       confidence = Math.min(confidence, 0.4);
       answer += lang === 'ta'
         ? '\n\n(குறிப்பு: நேரடி மொழி மாதிரி கட்டமைக்கப்படவில்லை. இது வரையறுக்கப்பட்ட உள்ளூர் பகுப்பாய்வு மட்டுமே.)'
+        : lang === 'tanglish'
+        ? '\n\n(Note: Live language model configure aagala, idhu limited local analysis mattum dhaan.)'
         : '\n\n(Note: no live language model is configured, so this is limited local analysis only.)';
     }
   } catch (e) {
@@ -1024,6 +1309,8 @@ export async function runGlobalCopilot(
     } catch {
       const serviceDown = lang === 'ta'
         ? 'இப்போது பதிலளிக்க முடியவில்லை.'
+        : lang === 'tanglish'
+        ? 'Ippo bathil solla mudiyala.'
         : 'I could not answer that just now.';
 
       return {

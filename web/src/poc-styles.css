@@ -71,6 +71,16 @@
           letter-spacing: .06em; color: var(--g-600); }
 .poc p { margin: 0 0 10px; }
 
+/* ---------------- top bar (sticky container keeping header + nav pinned together) ---------------- */
+.poc-top-bar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  width: 100%;
+  background: #f1f5f9;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+}
+
 /* ---------------- header ---------------- */
 .poc-header {
   background: linear-gradient(180deg, #222631 0%, #161920 100%);
@@ -78,7 +88,7 @@
   border-bottom: 3.5px solid #eab308;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.28), 0 1px 0 rgba(234, 179, 8, 0.4);
   display: flex; align-items: center; gap: 14px;
-  padding: 0 22px; height: 62px; position: sticky; top: 0; z-index: 40;
+  padding: 0 22px; height: 62px; position: relative; z-index: 2;
 }
 .poc-header .mark {
   width: 36px; height: 36px; border-radius: 8px;
@@ -549,9 +559,9 @@
   -webkit-overflow-scrolling: touch;
 }
 .table-loading-bar {
-  height: 2.5px;
+  height: 3px;
   width: 100%;
-  background: linear-gradient(90deg, #e2e8f0 0%, #ea580c 50%, #e2e8f0 100%);
+  background: linear-gradient(90deg, #006a4e 0%, #10b981 25%, #fbbf24 50%, #f59e0b 75%, #006a4e 100%);
   background-size: 200% 100%;
   animation: tableLoadingPulse 1.2s infinite ease-in-out;
 }
@@ -943,8 +953,8 @@
 
 /* ---------------- misc ---------------- */
 .poc .empty { padding: 30px 18px; text-align: center; color: var(--ink-3); font-size: 13px; }
-.poc .spin { display: inline-block; width: 13px; height: 13px; border: 2px solid var(--g-200);
-             border-top-color: var(--g-500); border-radius: 50%; animation: sp .7s linear infinite; }
+.poc .spin { display: inline-block; width: 14px; height: 14px; border: 2.5px solid rgba(0, 106, 78, 0.16);
+             border-top-color: #006a4e; border-right-color: #f59e0b; border-radius: 50%; animation: sp .75s cubic-bezier(0.5, 0.1, 0.4, 0.9) infinite; }
 @keyframes sp { to { transform: rotate(360deg); } }
 .poc .kv { display: grid; grid-template-columns: 165px 1fr; gap: 8px 14px; font-size: 13.5px; }
 .poc .kv dt { color: var(--ink-3); font-size: 12px; font-weight: 650; }
@@ -2617,12 +2627,18 @@ html[lang="ta"] .poc { line-height: 1.6; }
    E-GOV COPILOT — REAL CHATGPT-STYLE AI AGENT (LIGHT & DARK THEMES)
    ========================================================================= */
 
+.poc.poc-has-copilot {
+  height: 100vh;
+  overflow: hidden;
+}
+
 .poc-main.poc-main-copilot {
   padding: 12px 20px 20px !important;
   margin: 0 auto !important;
   max-width: 1060px !important;
   width: 100% !important;
-  height: calc(100vh - 84px);
+  height: calc(100vh - 118px) !important;
+  max-height: calc(100vh - 118px) !important;
   display: flex;
   flex-direction: column;
   background: transparent !important;
@@ -4466,5 +4482,364 @@ html[lang="ta"] .poc { line-height: 1.6; }
     border-radius: 12px;
   }
 }
+
+/* Tamil / English Toggle in Copilot Header */
+.copilot-lang-toggle {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 20px;
+  padding: 3px;
+  gap: 2px;
+  margin-right: 4px;
+}
+
+.copilot-agent-view.theme-dark .copilot-lang-toggle {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.copilot-lang-toggle-btn {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 4px 13px;
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 600;
+  color: inherit;
+  opacity: 0.72;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.copilot-lang-toggle-btn:hover {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.copilot-agent-view.theme-dark .copilot-lang-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.copilot-lang-toggle-btn.active {
+  background: #eab308;
+  color: #0f172a !important;
+  font-weight: 750;
+  opacity: 1;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+}
+
+/* Microphone Voice Dictation Button */
+.copilot-mic-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 0;
+  font-size: 16px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+  background: transparent;
+  color: inherit;
+}
+
+.copilot-agent-view.theme-light .copilot-mic-btn {
+  color: #555555;
+}
+
+.copilot-agent-view.theme-light .copilot-mic-btn:hover {
+  background: #f0f0f0;
+  color: #111111;
+}
+
+.copilot-agent-view.theme-dark .copilot-mic-btn {
+  color: #aaaaaa;
+}
+
+.copilot-agent-view.theme-dark .copilot-mic-btn:hover {
+  background: #2a2a2a;
+  color: #ffffff;
+}
+
+/* Listening active pulse */
+.copilot-mic-btn.listening {
+  background: #ef4444 !important;
+  color: #ffffff !important;
+  animation: copilot-mic-pulse 1.4s infinite;
+  box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+}
+
+@keyframes copilot-mic-pulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+  }
+  70% {
+    transform: scale(1.08);
+    box-shadow: 0 0 0 8px rgba(239, 68, 68, 0);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+  }
+}
+
+/* ============================================================
+   Official Tamil Nadu Government Round Logo Loader (Green & Gold)
+   ============================================================ */
+.gov-round-loader-container,
+.gov-logo-loader-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 1rem 0.75rem;
+  margin: 0 auto;
+  user-select: none;
+  box-sizing: border-box;
+}
+
+.gov-round-loader-container.inline,
+.gov-logo-loader-container.inline {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.15rem 0.35rem;
+  margin: 0;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.gov-round-loader-container.fullscreen,
+.gov-logo-loader-container.fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.theme-dark .gov-round-loader-container.fullscreen,
+.theme-dark .gov-logo-loader-container.fullscreen {
+  background: rgba(15, 23, 42, 0.94);
+}
+
+.gov-round-loader-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* Ambient Radial Aura in TN Green (#006a4e) and Temple Gold (#f59e0b) */
+.gov-round-loader-aura {
+  position: absolute;
+  inset: -16%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(245, 158, 11, 0.22) 0%, rgba(0, 106, 78, 0.16) 45%, transparent 72%);
+  animation: govAuraBreathe 2.2s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.theme-dark .gov-round-loader-aura {
+  background: radial-gradient(circle, rgba(245, 158, 11, 0.28) 0%, rgba(16, 185, 129, 0.22) 50%, transparent 74%);
+}
+
+.gov-round-loader-svg {
+  position: relative;
+  z-index: 1;
+  display: block;
+  overflow: visible;
+}
+
+/* Subtle background guide track */
+.gov-ring-track {
+  stroke: rgba(0, 106, 78, 0.12);
+  transition: stroke 0.3s ease;
+}
+
+.theme-dark .gov-ring-track {
+  stroke: rgba(16, 185, 129, 0.16);
+}
+
+/* Counter-rotating golden starlight dash ring */
+.gov-ring-counter-dash {
+  transform-origin: 50px 50px;
+  animation: govCounterSpin 7.5s linear infinite;
+}
+
+/* Primary Fast-Smooth Dual-Color Orbit Arc */
+.gov-ring-spinner {
+  transform-origin: 50px 50px;
+  stroke-dasharray: 175 100;
+  stroke-dashoffset: 0;
+  animation: govSpinRing 1.35s cubic-bezier(0.42, 0.08, 0.48, 0.95) infinite;
+  filter: drop-shadow(0 2px 6px rgba(0, 106, 78, 0.28));
+}
+
+/* Golden Accent Bead on the ring */
+.gov-ring-bead {
+  transform-origin: 50px 50px;
+  animation: govSpinRing 1.35s cubic-bezier(0.42, 0.08, 0.48, 0.95) infinite;
+}
+
+/* Center Emblem Disc */
+.gov-round-emblem-disc {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 3px 12px rgba(0, 106, 78, 0.14), inset 0 0 0 1px rgba(245, 158, 11, 0.28);
+  z-index: 2;
+  animation: govEmblemBreathe 2.4s ease-in-out infinite;
+}
+
+.theme-dark .gov-round-emblem-disc {
+  background: #1e293b;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4), inset 0 0 0 1px rgba(245, 158, 11, 0.38);
+}
+
+/* Tamil Nadu Government Emblem — Dignified and Upright */
+.gov-round-emblem-img {
+  display: block;
+  object-fit: contain;
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.08));
+}
+
+/* Typography & Labels */
+.gov-round-loader-text-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 0.85rem;
+}
+
+.gov-round-loader-container.inline .gov-round-loader-text-group {
+  margin-top: 0;
+  align-items: flex-start;
+}
+
+.gov-round-loader-label {
+  font-size: 0.92rem;
+  font-weight: 650;
+  color: #0f172a;
+  letter-spacing: 0.01em;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.gov-round-loader-container.inline .gov-round-loader-label {
+  font-size: 0.88rem;
+}
+
+.theme-dark .gov-round-loader-label {
+  color: #f1f5f9;
+}
+
+/* Animated 3-dots in Gold */
+.gov-loader-animated-dots {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 2px;
+}
+
+.gov-loader-animated-dots i {
+  font-style: normal;
+  color: #f59e0b;
+  font-weight: 800;
+  animation: govDotPulse 1.4s infinite ease-in-out both;
+}
+
+.gov-loader-animated-dots i:nth-child(1) { animation-delay: 0s; }
+.gov-loader-animated-dots i:nth-child(2) { animation-delay: 0.2s; }
+.gov-loader-animated-dots i:nth-child(3) { animation-delay: 0.4s; }
+
+.gov-round-loader-sublabel {
+  margin-top: 0.3rem;
+  font-size: 0.8rem;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.theme-dark .gov-round-loader-sublabel {
+  color: #94a3b8;
+}
+
+/* ============================================================
+   Keyframe Animations for Round Green & Gold Loader
+   ============================================================ */
+@keyframes govSpinRing {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes govCounterSpin {
+  0% {
+    transform: rotate(360deg);
+  }
+  100% {
+    transform: rotate(0deg);
+  }
+}
+
+@keyframes govAuraBreathe {
+  0%, 100% {
+    opacity: 0.45;
+    transform: scale(0.92);
+  }
+  50% {
+    opacity: 0.95;
+    transform: scale(1.08);
+  }
+}
+
+@keyframes govEmblemBreathe {
+  0%, 100% {
+    transform: translate(-50%, -50%) scale(0.97);
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.025);
+  }
+}
+
+@keyframes govDotPulse {
+  0%, 80%, 100% {
+    opacity: 0.25;
+    transform: translateY(0);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(-2px);
+    color: #fbbf24;
+  }
+}
+
 
 

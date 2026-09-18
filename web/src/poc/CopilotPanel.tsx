@@ -2,7 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { pocApi, pct, getPocToken } from './pocApi';
 import { useI18n } from '../lib/i18n';
 import { speak, stopSpeaking, ttsSupport, type SpeakHandle } from '../lib/tts';
+import { speechSupport, startDictation, type Dictation } from '../lib/speech';
 import { AiSettingsDialog } from './AiSettingsDialog';
+import { GovernmentLogoLoader } from './GovernmentLogoLoader';
 
 /**
  * e-Gov Copilot — Hermes-pattern AI assistant panel.
@@ -72,6 +74,13 @@ function isMixed(text: string): boolean {
   const total = ta + en;
   if (!total) return false;
   return ta / total > 0.1 && en / total > 0.1;
+}
+
+/** Detect phonetic Tamil written in Latin script (Tanglish). */
+function isTanglish(text: string): boolean {
+  if (!text) return false;
+  if (/[\u0B80-\u0BFF]/.test(text)) return false;
+  return /\b(pathi|paththi|enna|eppadi|solla|sollu|irukku|iruku|illai|venum|kudunga|pannunga|panna|yaar|yaaru|enge|enga|epadi|edhuku|aagum|mudiyuma|kooduma|thonga|thanga|kodunga|vendum|theriyuma|kettu|kekura|romba|konjam|ippo|eppo|inga|anga|unakku|enakku|ungala|ungalaala|theriyum|panrathu|pannanum|maari|marri)\b/i.test(text);
 }
 
 /** Source icon per source type. */
@@ -173,12 +182,54 @@ export function CopilotPanel({ feed, onClose, petitionId }: {
   const [showSettings, setShowSettings] = useState(false);
   const [speakingId, setSpeakingId] = useState<number | null>(null);
   const [copiedId, setCopiedId] = useState<number | null>(null);
+  const [isListening, setIsListening] = useState(false);
+  const dictationRef = useRef<Dictation | null>(null);
 
   const fileRef = useRef<HTMLInputElement | null>(null);
   const endRef = useRef<HTMLDivElement | null>(null);
   const taRef = useRef<HTMLTextAreaElement | null>(null);
   const speakRef = useRef<SpeakHandle | null>(null);
   const tts = ttsSupport();
+
+  const toggleListening = () => {
+    if (isListening) {
+      dictationRef.current?.stop();
+      dictationRef.current = null;
+      setIsListening(false);
+      return;
+    }
+    const sup = speechSupport();
+    if (!sup.supported) {
+      alert(sup.reason || 'Speech recognition is not supported in this browser.');
+      return;
+    }
+
+    const recLang = lang === 'ta' ? 'ta-IN' : 'en-IN';
+    setIsListening(true);
+    dictationRef.current = startDictation(recLang, {
+      onFinal: (text) => {
+        setInput((prev) => (prev ? `${prev} ${text}` : text));
+        taRef.current?.focus();
+      },
+      onInterim: (_text) => {},
+      onError: (err) => {
+        console.warn('Speech recognition error:', err);
+        setIsListening(false);
+        dictationRef.current = null;
+      },
+      onEnd: () => {
+        setIsListening(false);
+        dictationRef.current = null;
+      },
+    });
+  };
+
+  useEffect(() => {
+    return () => {
+      dictationRef.current?.stop();
+      dictationRef.current = null;
+    };
+  }, []);
 
   const push = (m: Omit<Msg, 'id'>) =>
     setMessages((prev) => [...prev, { ...m, id: Date.now() + Math.random() }]);
@@ -280,12 +331,18 @@ export function CopilotPanel({ feed, onClose, petitionId }: {
     }
 
     if (!question) return;
+    if (isListening) {
+      dictationRef.current?.stop();
+      dictationRef.current = null;
+      setIsListening(false);
+    }
     push({ role: 'USER', content: question });
     setInput(''); setBusy(true);
     try {
+      const sendLang = isTanglish(question) ? 'tanglish' : lang;
       const r = await pocApi.post<any>('/cp/e-gov-chat', {
         question,
-        lang,
+        lang: sendLang,
         ...(docId ? { petitionId: docId } : {}),
       });
       push({
@@ -379,7 +436,11 @@ export function CopilotPanel({ feed, onClose, petitionId }: {
         {showSettings && <AiSettingsDialog onClose={() => setShowSettings(false)} />}
 
         <div className="copilot-body">
-          {!loaded && <div className="empty"><span className="spin" /></div>}
+          {!loaded && (
+            <div className="empty" style={{ display: 'flex', justifyContent: 'center', padding: '2.5rem 0' }}>
+              <GovernmentLogoLoader size="md" label={t('common.loading')} />
+            </div>
+          )}
 
           {loaded && !started && (
             <div className="copilot-welcome">
@@ -480,8 +541,8 @@ export function CopilotPanel({ feed, onClose, petitionId }: {
 
           {busy && (
             <div className="cmsg agent">
-              <div className="bubble thinking">
-                <span className="dots"><i /><i /><i /></span>
+              <div className="bubble thinking" style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                <GovernmentLogoLoader size="xs" inline />
                 <span>{stage ? t(STAGE_KEY[stage] ?? 'agent.stageUpload') : t('cop.thinking')}</span>
               </div>
             </div>
@@ -519,6 +580,17 @@ export function CopilotPanel({ feed, onClose, petitionId }: {
             <button className="tool" disabled={busy} onClick={() => fileRef.current?.click()}
               title={t('agent.attach')}>+</button>
             <div className="grow" />
+            {speechSupport().supported && (
+              <button
+                type="button"
+                className={`tool copilot-mic-btn ${isListening ? 'listening' : ''}`}
+                disabled={busy}
+                onClick={toggleListening}
+                title={isListening ? 'Listening... click to stop' : 'Voice input (Speak in Tamil / English)'}
+              >
+                {isListening ? '🎙️…' : '🎙️'}
+              </button>
+            )}
             <button className={`send${canSend ? ' on' : ''}`} disabled={!canSend}
               onClick={() => void send()} title={t('agent.send')}>↑</button>
           </div>
@@ -548,21 +620,175 @@ function confidenceTip(tier: string | null | undefined, lang: string): string {
  * Turn a finished document analysis into the agent's opening reply.
  */
 function summarise(r: any, lang: string, t: (k: string) => string): string {
-  const a = r?.analysis;
-  if (!a) return t('agent.errUnreadable');
-  const L = lang === 'ta' ? 'ta' : 'en';
-  const v = (b: any) => (b && typeof b === 'object' ? (b[L] || b.en) : b) || '—';
+  const a = r?.analysis || r;
+  if (!a || (!a.summary && !a.main_issue)) return t('agent.errUnreadable');
 
-  const lines = [
-    v(a.summary),
-    '',
-    `${t('ai.act')}: ${a.act?.id ? v(a.act.short_name) : t('agent.notIdentified')}`,
-    `${t('agent.section')}: ${a.act?.section_no ?? t('agent.needsVerification')}`,
-    `${t('ai.department')}: ${a.department?.id ? v(a.department.name) : t('agent.deptUnknown')}`,
-    `${t('ai.authority')}: ${a.authority?.id ? v(a.authority.designation) : t('agent.notIdentified')}`,
-    `${t('ai.priority')}: ${a.priority ?? '—'}`,
-    '',
-    `${t('agent.secAction')}: ${v(a.next_action)}`,
-  ];
+  const isTa = lang === 'ta';
+  const isTanglish = lang === 'tanglish';
+
+  const v = (b: any) => {
+    if (!b) return '—';
+    if (typeof b === 'object') {
+      return (isTa ? (b.ta || b.en) : (b.en || b.ta)) || '—';
+    }
+    return String(b);
+  };
+
+  const lines: string[] = [];
+
+  // Header Title
+  if (isTa) {
+    lines.push('### 📋 ஆவண ஆய்வு & சட்ட நிர்வாக பகுப்பாய்வு அறிக்கை');
+  } else if (isTanglish) {
+    lines.push('### 📋 Document AI Analysis Mudivu (Statutory & Departmental Report)');
+  } else {
+    lines.push('### 📋 Document AI Statutory & Administrative Analysis Report');
+  }
+  lines.push('');
+
+  // Overview / Summary
+  if (a.summary) {
+    lines.push(v(a.summary));
+    lines.push('');
+  }
+
+  // Grievance Details & Petitioner Particulars
+  const doc = r?.document;
+  const ext = doc?.extracted_details;
+  const petitionerName = ext?.name || (a.entities?.people && a.entities.people.length > 0 ? a.entities.people[0] : null);
+  const petitionerPhone = ext?.phone || null;
+  const petitionerPlace = ext?.district || ext?.taluk || (a.entities?.places && a.entities.places.length > 0 ? a.entities.places[0] : null);
+  const docDate = ext?.date || (a.entities?.dates && a.entities.dates.length > 0 ? a.entities.dates[0] : null);
+
+  if (petitionerName || petitionerPhone || petitionerPlace || docDate) {
+    if (isTa) {
+      lines.push('**மனுதாரர் & ஆவண விவரங்கள்:**');
+      if (petitionerName) lines.push(`• **பெயர்:** ${petitionerName}`);
+      if (petitionerPhone) lines.push(`• **தொடர்பு எண்:** ${petitionerPhone}`);
+      if (petitionerPlace) lines.push(`• **மாவட்டம் / இடம்:** ${petitionerPlace}`);
+      if (docDate) lines.push(`• **ஆவண தேதி:** ${docDate}`);
+    } else if (isTanglish) {
+      lines.push('**Petitioner & Aavana Vivaram:**');
+      if (petitionerName) lines.push(`• **Petitioner Peyar:** ${petitionerName}`);
+      if (petitionerPhone) lines.push(`• **Phone Number:** ${petitionerPhone}`);
+      if (petitionerPlace) lines.push(`• **District / Idam:** ${petitionerPlace}`);
+      if (docDate) lines.push(`• **Aavana Thethi (Date):** ${docDate}`);
+    } else {
+      lines.push('**Petitioner & Document Particulars:**');
+      if (petitionerName) lines.push(`• **Petitioner Name:** ${petitionerName}`);
+      if (petitionerPhone) lines.push(`• **Contact No:** ${petitionerPhone}`);
+      if (petitionerPlace) lines.push(`• **Location / District:** ${petitionerPlace}`);
+      if (docDate) lines.push(`• **Document Date:** ${docDate}`);
+    }
+    lines.push('');
+  }
+
+  // Core Grievance Issue & Request
+  if (a.main_issue || a.petitioner_request) {
+    if (isTa) {
+      lines.push('**பிரச்சனை & கோரிக்கை சுருக்கம்:**');
+      if (a.main_issue) lines.push(`• **முக்கிய பிரச்சனை:** ${v(a.main_issue)}`);
+      if (a.petitioner_request) lines.push(`• **மனுதாரர் கோரிக்கை:** ${v(a.petitioner_request)}`);
+    } else if (isTanglish) {
+      lines.push('**Mukkiya Issue & Kuraidheerppu Koorikkai:**');
+      if (a.main_issue) lines.push(`• **Mukkiya Issue:** ${v(a.main_issue)}`);
+      if (a.petitioner_request) lines.push(`• **Petitioner-oda Request:** ${v(a.petitioner_request)}`);
+    } else {
+      lines.push('**Core Issue & Relief Requested:**');
+      if (a.main_issue) lines.push(`• **Main Grievance:** ${v(a.main_issue)}`);
+      if (a.petitioner_request) lines.push(`• **Petitioner's Prayer:** ${v(a.petitioner_request)}`);
+    }
+    lines.push('');
+  }
+
+  // Applicable Statutory Provisions (Act & Section)
+  if (isTa) {
+    lines.push('**பொருந்தக்கூடிய சட்டம் & சட்டப்பிரிவு (Applicable Statutory Framework):**');
+  } else if (isTanglish) {
+    lines.push('**Porundhum Sattam & Pirivu (Applicable Act & Section):**');
+  } else {
+    lines.push('**Applicable Statutory Framework (Act & Section):**');
+  }
+
+  const actName = a.act?.id ? v(a.act.short_name) : (isTa ? 'அடையாளம் காணப்படவில்லை' : isTanglish ? 'Act kandupidikkapadavillai' : 'Not identified');
+  const actYear = a.act?.year ? ` (${a.act.year})` : '';
+  const sectionInfo = a.act?.section_no ? `${a.act.section_no}${a.act.section_heading ? ` – ${v(a.act.section_heading)}` : ''}` : (isTa ? 'சரிபார்ப்பு தேவை' : isTanglish ? 'Verification thevai' : 'Needs Verification');
+
+  lines.push(`• **${isTa ? 'சட்டம்' : isTanglish ? 'Sattam (Act)' : 'Act'}:** ${actName}${actYear}`);
+  lines.push(`• **${isTa ? 'பிரிவு' : isTanglish ? 'Pirivu (Section)' : 'Section'}:** ${sectionInfo}`);
+
+  if (a.act?.reason) {
+    const actReasonLabel = isTa ? 'சட்ட ரீதியான காரணம்' : isTanglish ? 'Satta Kaaranam (Act Rationale)' : 'Statutory Rationale';
+    lines.push(`• **${actReasonLabel}:** ${v(a.act.reason)}`);
+  }
+  lines.push('');
+
+  // Competent Department & Authority
+  if (isTa) {
+    lines.push('**தொடர்புடைய அரசுத்துறை & அதிகார வரம்பு (Department & Authority):**');
+  } else if (isTanglish) {
+    lines.push('**Poruppaana Thurai & Adhigaari (Competent Department & Authority):**');
+  } else {
+    lines.push('**Competent Administrative Department & Authority:**');
+  }
+
+  const deptName = a.department?.id ? v(a.department.name) : (isTa ? 'அடையாளம் காணப்படவில்லை' : isTanglish ? 'Thurai theriyavillai' : 'Unknown');
+  const deptCode = a.department?.code ? ` [${a.department.code}]` : '';
+  const authName = a.authority?.id ? `${v(a.authority.designation)}${a.authority.office_name ? ` (${v(a.authority.office_name)})` : ''}` : (isTa ? 'அடையாளம் காணப்படவில்லை' : isTanglish ? 'Kandupidikkapadavillai' : 'Not identified');
+
+  lines.push(`• **${isTa ? 'அரசுத்துறை' : isTanglish ? 'Arasu Thurai (Department)' : 'Department'}:** ${deptName}${deptCode}`);
+  lines.push(`• **${isTa ? 'தகுதிவாய்ந்த அதிகாரி' : isTanglish ? 'Adhigaari (Authority)' : 'Competent Authority'}:** ${authName}`);
+
+  if (a.department?.reason) {
+    const deptReasonLabel = isTa ? 'துறை அதிகார எல்லை விளக்கம்' : isTanglish ? 'Thurai Kaaranam (Department Rationale)' : 'Departmental Rationale';
+    lines.push(`• **${deptReasonLabel}:** ${v(a.department.reason)}`);
+  }
+  lines.push('');
+
+  // Required Documents
+  if (Array.isArray(a.required_documents) && a.required_documents.length > 0) {
+    if (isTa) {
+      lines.push('**தேவைப்படும் ஆதார ஆவணங்கள் (Required Documents):**');
+    } else if (isTanglish) {
+      lines.push('**Thevaipadum Aavanangal (Mandatory Required Documents):**');
+    } else {
+      lines.push('**Mandatory Required Documents:**');
+    }
+    for (const docItem of a.required_documents) {
+      lines.push(`• ${v(docItem)}`);
+    }
+    lines.push('');
+  }
+
+  // Redressal Workflow
+  if (Array.isArray(a.workflow) && a.workflow.length > 0) {
+    if (isTa) {
+      lines.push('**சட்டரீதியான தீர்வு நடைமுறை (Statutory Redressal Workflow):**');
+    } else if (isTanglish) {
+      lines.push('**Sattareedhiyaana Nadavadikkai Varisai (Workflow Steps):**');
+    } else {
+      lines.push('**Statutory Redressal Workflow:**');
+    }
+    a.workflow.forEach((wf: any, idx: number) => {
+      lines.push(`${idx + 1}. ${v(wf)}`);
+    });
+    lines.push('');
+  }
+
+  // Priority & Action
+  if (isTa) {
+    lines.push('**முன்னுரிமை & உடனடி நடவடிக்கை:**');
+    lines.push(`• **முன்னுரிமை நிலை:** ${a.priority || 'NORMAL'}${a.priority_reason ? ` (${v(a.priority_reason)})` : ''}`);
+    lines.push(`• **அடுத்த கட்ட நடவடிக்கை:** ${v(a.next_action)}`);
+  } else if (isTanglish) {
+    lines.push('**Priority & Udanadi Nadavadikkai (Action Required):**');
+    lines.push(`• **Priority Nilai:** ${a.priority || 'NORMAL'}${a.priority_reason ? ` (${v(a.priority_reason)})` : ''}`);
+    lines.push(`• **Adutha Kattam (Immediate Action):** ${v(a.next_action)}`);
+  } else {
+    lines.push('**Priority & Immediate Action:**');
+    lines.push(`• **Priority Level:** ${a.priority || 'NORMAL'}${a.priority_reason ? ` (${v(a.priority_reason)})` : ''}`);
+    lines.push(`• **Immediate Officer Action:** ${v(a.next_action)}`);
+  }
+
   return lines.join('\n');
 }

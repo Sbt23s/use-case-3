@@ -52,9 +52,16 @@ const OFFICIAL_DOMAINS = [
   'nic.in',
   'tnega.tn.gov.in',
   'cms.tn.gov.in',
+  'gmdps.tn.gov.in',
+  'cmhelpline.tnega.org',
   'stationeryprinting.tn.gov.in',   // Tamil Nadu Gazette
   'indiacode.nic.in',                // central and state Acts
   'egazette.gov.in',
+  'coimbatore.nic.in',
+  'eservices.tn.gov.in',
+  'edistricts.tn.gov.in',
+  'tnreginet.gov.in',
+  'twadboard.tn.gov.in',
 ];
 
 function isOfficial(url: string): boolean {
@@ -109,9 +116,16 @@ async function fetchWithTimeout(url: string, ms: number, init: RequestInit = {})
   }
 }
 
-function isGovQuery(q: string): boolean {
-  return /\b(government|govt|tamil\s*nadu|tn|chief\s*minister|cm|minister|governor|collector|department|scheme|subsidy|welfare|order|g\.o\.|gazette|act|section|law|court|petition|grievance|pension|patta|chitta|fir|ration|aadhaar)\b/i.test(q)
-    || /(அரசு|தமிழ்நாடு|முதலமைச்சர்|அமைச்சர்|ஆட்சியர்|துறை|திட்டம்|மானியம்|அரசாணை|சட்டம்|மனு|பட்டா|சிட்டா)/.test(q);
+export function isGovQuery(q: string): boolean {
+  // If the query is about general topics (entertainment, coding, science, sports, recipes, math, general tech),
+  // do NOT restrict to government domains. Allow full open web search!
+  if (/\b(movie|movies|film|films|filmography|actor|actress|cinema|songs?|album|trailer|director|box\s*office|cricket|football|game|sport|sports|recipe|food|programming|coding|algorithm|python|javascript|typescript|java|c\+\+|css|html|react|sql|quantum|physics|chemistry|biology|astronomy|galaxy|planet|math|mathematics)\b/i.test(q)
+      || /(திரைப்படம்|படம்|பாடல்கள்?|நடிகர்|நடிகை|சினிமா|கிரிக்கெட்|விளையாட்டு|சமையல்|புரோகிராமிங்)/.test(q)) {
+    return false;
+  }
+
+  return /\b(government|govt|tamil\s*nadu|tn|chief\s*minister|cm|minister|governor|collector|department|dept|scheme|subsidy|welfare|government\s*order|g\.o\.|g\.o\.ms|goms|gazette|statutory\s*act|act\b|section|rule|rules|law|court|petition|grievance|pension|patta|chitta|adangal|fmb|fir|ration|aadhaar|district|districts|taluk|village|panchayat|municipality|corporation|tahsildar|rdo|bdo|dro|commissioner|workflow|portal|kmut|magalir|urimai|breakfast|pudhumai|mudhalvan|innuyir|jamabandi|1100|mugavari|certificate|certificates|community|income|nativity|legal\s*heir|destitute|first\s*graduate|esevai|e-sevai|tnega|tnreginet|guideline\s*value|registration)\b/i.test(q)
+    || /(அரசு|தமிழ்நாடு|முதலமைச்சர்|அமைச்சர்|ஆட்சியர்|துறை|திட்டம்|மானியம்|அரசாணை|சட்டம்|விதி|பிரிவு|மனு|பட்டா|சிட்டா|அடங்கல்|மாவட்டம்|வட்டம்|கிராமம்|ஊராட்சி|பேரூராட்சி|நகராட்சி|மாநகராட்சி|வட்டாட்சியர்|முகவரி|ஜமாபந்தி|சான்றிதழ்|வாரிசு|வருமானம்|சாதி|இருப்பிடம்|இ-சேவை|பதிவுத்துறை)/.test(q);
 }
 
 // ============================================================ Multi-Source Deep Search
@@ -278,28 +292,87 @@ class DuckDuckGoProvider implements ISearchProvider {
     return { ok: true, results, provider: this.name };
   }
 
-  private async performFetch(searchQuery: string, limit: number): Promise<SearchResult[]> {
-    const url = 'https://html.duckduckgo.com/html/';
-    const body = new URLSearchParams({ q: searchQuery }).toString();
+  private decodeBingUrl(rawUrl: string): string {
     try {
-      const res = await fetchWithTimeout(url, 3000, {
-        method: 'POST',
+      const clean = rawUrl.replace(/&amp;/g, '&');
+      const parsed = new URL(clean);
+      const u = parsed.searchParams.get('u') || parsed.searchParams.get('amp;u');
+      if (u && u.startsWith('a1')) {
+        const base64 = u.slice(2);
+        const decoded = Buffer.from(base64, 'base64').toString('utf8');
+        if (/^https?:\/\//i.test(decoded)) return decoded;
+      }
+    } catch {
+      /* use rawUrl */
+    }
+    return rawUrl;
+  }
+
+  private async performFetch(searchQuery: string, limit: number): Promise<SearchResult[]> {
+    // 1. DuckDuckGo GET endpoints (robust, bypasses html.duckduckgo.com POST challenges)
+    const ddgUrls = [
+      `https://duckduckgo.com/html/?q=${encodeURIComponent(searchQuery)}`,
+      `https://html.duckduckgo.com/html/?q=${encodeURIComponent(searchQuery)}`,
+    ];
+
+    for (const url of ddgUrls) {
+      try {
+        const res = await fetchWithTimeout(url, 4000, {
+          method: 'GET',
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+          },
+        });
+        if (res.ok) {
+          const html = await res.text();
+          const parsed = this.parse(html).slice(0, limit * 2);
+          if (parsed.length) return parsed;
+        }
+      } catch {
+        /* try next candidate */
+      }
+    }
+
+    // 2. High-reliability fallback: Bing Search
+    try {
+      const bingUrl = `https://www.bing.com/search?q=${encodeURIComponent(searchQuery)}&setlang=en-US&setmkt=en-US&mkt=en-US&cc=US`;
+      const res = await fetchWithTimeout(bingUrl, 4500, {
         headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'Origin': 'https://html.duckduckgo.com',
-          'Referer': 'https://html.duckduckgo.com/',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
           'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.5',
+          'Accept-Language': 'en-US,en;q=0.9',
         },
-        body,
       });
       if (res.ok) {
         const html = await res.text();
-        const parsed = this.parse(html).slice(0, limit * 2);
-        if (parsed.length) return parsed;
+        const matches = html.matchAll(/<li[^>]+class="[^"]*b_algo[^"]*"[^>]*>([\s\S]*?)<\/li>/gi);
+        const out: SearchResult[] = [];
+        for (const m of matches) {
+          const block = m[1];
+          const titleMatch = block.match(/<h2[^>]*>\s*<a[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i);
+          const snippetMatch = block.match(/<p[^>]*>([\s\S]*?)<\/p>/i);
+          if (titleMatch) {
+            const rawUrl = titleMatch[1];
+            const url = this.decodeBingUrl(rawUrl);
+            const title = htmlToText(titleMatch[2]).slice(0, 200);
+            const snippet = snippetMatch ? htmlToText(snippetMatch[1]) : '';
+            if (/^https?:\/\//i.test(url)) {
+              out.push({
+                title,
+                url,
+                snippet,
+                source: domainOf(url),
+              });
+            }
+          }
+          if (out.length >= limit * 2) break;
+        }
+        if (out.length) return out;
       }
     } catch {
-      /* network or rate-limit fallback */
+      /* search fallback */
     }
 
     return [];
@@ -409,8 +482,149 @@ class GoogleSearchProvider implements ISearchProvider {
   }
 }
 
+// ==================================================== Firecrawl Search
+/**
+ * Firecrawl Deep Search Provider.
+ *
+ * Calls Firecrawl API (v2 / v1) using Bearer authentication to retrieve live web results,
+ * structured markdown descriptions, and URLs. Falls back to DuckDuckGo/Bing/Wikipedia if needed.
+ */
+export class FirecrawlSearchProvider implements ISearchProvider {
+  readonly name = 'firecrawl-deep-search';
+  readonly available: boolean;
+  private fallbackProvider: ISearchProvider;
+
+  constructor(private apiKey: string = process.env.FIRECRAWL_API_KEY || 'fc-2456810abc6a4d3489824a5cf5cd229a') {
+    this.available = !!this.apiKey;
+    this.fallbackProvider = new DuckDuckGoProvider();
+  }
+
+  async search(query: string, limit = 4): Promise<SearchOutcome> {
+    if (!this.available) {
+      return this.fallbackProvider.search(query, limit);
+    }
+
+    const isGov = isGovQuery(query);
+
+    try {
+      // Run Firecrawl search concurrently with deep Wikipedia facts
+      const [fcRes, wikiResults] = await Promise.all([
+        (async () => {
+          const res = await fetchWithTimeout('https://api.firecrawl.dev/v2/search', 7000, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${this.apiKey}`,
+            },
+            body: JSON.stringify({
+              query,
+              limit: Math.max(limit, 5),
+            }),
+          });
+          if (!res.ok) {
+            console.warn(`[firecrawl] search returned HTTP ${res.status}`);
+            return null;
+          }
+          return await res.json();
+        })(),
+        fetchWikipediaDeep(query, 2),
+      ]);
+
+      const items: any[] = Array.isArray(fcRes?.data?.web)
+        ? fcRes.data.web
+        : (Array.isArray(fcRes?.data) ? fcRes.data : []);
+
+      if (!items.length) {
+        // Fallback to DuckDuckGo/Bing/Wiki if Firecrawl returned no items
+        return await this.fallbackProvider.search(query, limit);
+      }
+
+      const parsed: SearchResult[] = [];
+      const seenUrls = new Set<string>();
+      const seenTitles = new Set<string>();
+
+      for (const it of items) {
+        const url = String(it.url || '').trim();
+        const title = htmlToText(String(it.title || '')).slice(0, 200);
+        const description = String(it.description || '').trim();
+        if (!/^https?:\/\//i.test(url)) continue;
+
+        parsed.push({
+          title,
+          url,
+          snippet: description.slice(0, 400),
+          source: domainOf(url),
+          content: description.length > 80 ? description.slice(0, 3500) : undefined,
+        });
+      }
+
+      const combined: SearchResult[] = [];
+
+      // 1. Prioritize official government domains for government queries
+      if (isGov) {
+        for (const r of parsed) {
+          if (isOfficial(r.url) && !seenUrls.has(r.url)) {
+            seenUrls.add(r.url);
+            seenTitles.add(r.title.toLowerCase());
+            combined.push(r);
+          }
+        }
+      }
+
+      // 2. Add Wikipedia deep encyclopedic extracts
+      for (const w of wikiResults) {
+        const lower = w.title.toLowerCase();
+        if (!seenTitles.has(lower) && !seenUrls.has(w.url)) {
+          seenUrls.add(w.url);
+          seenTitles.add(lower);
+          combined.push(w);
+        }
+      }
+
+      // 3. Add remaining web results from Firecrawl
+      for (const r of parsed) {
+        const lower = r.title.toLowerCase();
+        if (!seenUrls.has(r.url) && !seenTitles.has(lower)) {
+          seenUrls.add(r.url);
+          seenTitles.add(lower);
+          combined.push(r);
+        }
+      }
+
+      const out = combined.slice(0, Math.max(limit, 4));
+
+      // 4. Concurrently fetch page text for top results lacking full text
+      await Promise.all(out.slice(0, 3).map(async (r) => {
+        if (r.content && r.content.length > 200) return;
+        try {
+          const pageRes = await fetchWithTimeout(r.url, 4000);
+          if (!pageRes.ok) return;
+          const ct = pageRes.headers.get('content-type') || '';
+          if (!ct.includes('html') && !ct.includes('text')) return;
+          const body = await pageRes.text();
+          const text = htmlToText(body);
+          if (text.length > 80) r.content = text.slice(0, 3500);
+        } catch {
+          /* snippet stands */
+        }
+      }));
+
+      return {
+        ok: true,
+        results: out,
+        provider: this.name,
+      };
+    } catch (err) {
+      console.warn('[firecrawl] error during search, falling back to backup search:', err);
+      return await this.fallbackProvider.search(query, limit);
+    }
+  }
+}
+
 // ---------------------------------------------------------------- wiring
 let searchProvider: ISearchProvider = (() => {
+  const fcKey = process.env.FIRECRAWL_API_KEY || 'fc-2456810abc6a4d3489824a5cf5cd229a';
+  if (fcKey) return new FirecrawlSearchProvider(fcKey);
   const key = process.env.GOOGLE_SEARCH_API_KEY;
   const cx = process.env.GOOGLE_SEARCH_CX;
   if (key && cx) return new GoogleSearchProvider(key, cx);
@@ -435,8 +649,8 @@ export async function searchOfficialSources(query: string, limit = 3): Promise<S
 
   const outcome = await searchProvider.search(query, limit);
 
-  // Only a successful search is cached; a transient failure should be retried.
-  if (outcome.ok) {
+  // Only cache when results were actually found; empty or failed searches should be retried fresh.
+  if (outcome.ok && outcome.results.length > 0) {
     cache.set(key, { at: Date.now(), outcome });
     if (cache.size > 200) cache.delete(cache.keys().next().value as string);
   }
@@ -448,8 +662,11 @@ export function searchStatus() {
     provider: searchProvider.name,
     available: searchProvider.available,
     official_domains: OFFICIAL_DOMAINS,
-    note: searchProvider.name === 'duckduckgo-html'
-      ? 'Using the HTML scraper. It has no API contract and may be rate-limited; set GOOGLE_SEARCH_API_KEY and GOOGLE_SEARCH_CX for a reliable search API.'
-      : 'Using a search API with a service contract.',
+    note: searchProvider.name === 'firecrawl-deep-search'
+      ? 'Using Firecrawl Real-Time Deep Web Search with multi-source verification.'
+      : searchProvider.name === 'google-programmable-search'
+      ? 'Using Google Programmable Search API.'
+      : 'Using multi-source web search with Wikipedia & search endpoints.',
   };
 }
+

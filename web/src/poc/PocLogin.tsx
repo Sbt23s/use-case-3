@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { pocApi } from './pocApi';
 import { AppFooter } from './AppFooter';
 import { useI18n, LanguageToggle } from '../lib/i18n';
+import { GovernmentLogoLoader } from './GovernmentLogoLoader';
 
 export function PocLogin({ onLogin }: { onLogin: (token: string, user?: any) => Promise<void> }) {
   const { t, lang } = useI18n();
@@ -58,8 +59,13 @@ export function PocLogin({ onLogin }: { onLogin: (token: string, user?: any) => 
               <label>{t('login.password')}</label>
               <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
             </div>
-            <button className="btn primary" type="submit" disabled={busy} style={{ width: '100%' }}>
-              {busy ? <><span className="spin" /> {t('common.loading')}</> : t('login.submit')}
+            <button
+              className="btn primary"
+              type="submit"
+              disabled={busy}
+              style={{ width: '100%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+            >
+              {busy ? <><GovernmentLogoLoader size="xs" inline /> {t('common.loading')}</> : t('login.submit')}
             </button>
           </form>
 

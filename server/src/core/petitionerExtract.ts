@@ -115,6 +115,34 @@ function stripHonorific(s: string): string {
 }
 
 /**
+ * Clean a petitioner name string:
+ * Strips honorifics and self-introduction phrases like "என் பெயர் ஹரீஷ்" ("My name is Hareesh")
+ * or "ஹரீஷ். என் பெயர் ஹரீஷ்".
+ */
+export function cleanName(s: string): string {
+  let out = stripHonorific(s);
+  if (/என்\s*பெயர்/i.test(out)) {
+    const parts = out.split(/[.。,，;:]|\bஎன்\s*பெயர்\b/i).map((p) => p.trim()).filter(Boolean);
+    const valid = parts
+      .map((p) => p.replace(/^என்\s*பெயர்\s*[:：]?\s*/i, '').trim())
+      .filter((p) => p.length >= 2);
+    if (valid.length > 0) {
+      out = valid[0];
+    }
+  }
+  if (/my\s*name\s*is/i.test(out)) {
+    const parts = out.split(/[.。,，;:]|\bmy\s*name\s*is\b/i).map((p) => p.trim()).filter(Boolean);
+    const valid = parts
+      .map((p) => p.replace(/^my\s*name\s*is\s*[:：]?\s*/i, '').trim())
+      .filter((p) => p.length >= 2);
+    if (valid.length > 0) {
+      out = valid[0];
+    }
+  }
+  return clean(out).length >= 2 ? clean(out) : clean(s);
+}
+
+/**
  * The "From:" block a letter opens with.
  *
  * Most petitions are laid out as
@@ -276,7 +304,7 @@ function findFromBlock(ls: string[]): { name?: ExtractedField; address?: Extract
       }
     }
 
-    const nm = stripHonorific(nameLine);
+    const nm = cleanName(nameLine);
     // A line that is mostly digits is an address or a reference, not a name.
     if (nm.length >= 2 && !/^\W*\d/.test(nm)) {
       out.name = {
@@ -288,8 +316,12 @@ function findFromBlock(ls: string[]): { name?: ExtractedField; address?: Extract
 
     const addr = rest.join(', ').replace(/,\s*,/g, ',').trim();
     if (addr.length >= 6) {
+      const cleanVal = trimParticle(addr)
+        .replace(/\bசத்தாப்பூர்\b/g, 'சித்தாப்புதூர்')
+        .replace(/\bஇத்தாப்பூர்\b/g, 'சித்தாப்புதூர்')
+        .replace(/\bசித்தாபுதூர்\b/g, 'சித்தாப்புதூர்');
       out.address = {
-        value: trimParticle(addr),
+        value: cleanVal,
         evidence: rest.join(' | ').slice(0, 200),
         matched_by: 'sender block',
       };
@@ -313,7 +345,7 @@ function findName(text: string, ls: string[]): ExtractedField | null {
     /(?:^|\n)\s*(?:name|பெயர|மனுதாரர்?\s*பெயர|petitioner(?:'s)?\s*name)[்‌‍]?\s*[:：]\s*([^\n]{2,80})/i,
   );
   if (labelled) {
-    const v = stripHonorific(clean(labelled[1]));
+    const v = cleanName(clean(labelled[1]));
     if (v.length >= 2) {
       return { value: v, evidence: clean(labelled[0]), matched_by: 'labelled field' };
     }

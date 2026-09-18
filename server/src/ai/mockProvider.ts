@@ -148,6 +148,10 @@ export class MockAIProvider implements IAIProvider {
     const qMatch = o.user.match(/OFFICER'S QUESTION:\s*([^\n]+)/i);
     const question = qMatch ? qMatch[1].trim() : '';
     const isTa = o.system?.includes('ANSWER ENTIRELY IN TAMIL') || /[\u0B80-\u0BFF]/.test(question);
+    const isTanglish = !isTa && (
+      o.system?.includes('ANSWER ENTIRELY IN NATURAL TANGLISH')
+      || /\b(pathi|pathii|sollu|solla|sollunga|enna|ethu|edhu|epdi|eppadi|kudunga|kudu|pannu|panna|panradhu|pannradhu|pannanum|irukku|iruku|venum|vendum|kettalum|kettalumm|patil|bathil|kandippa|maari|illama|ilalma|yaaru|yaar|evaru|unga|ungala|unna|senja|uruvak|tanglis|tanglish|vachirukken|potrukken)\b/i.test(question)
+    );
 
     const lines = o.user.split('\n');
     let actTitle = '';
@@ -158,6 +162,46 @@ export class MockAIProvider implements IAIProvider {
     let petitionType = '';
     let deptTitle = '';
     let authTitle = '';
+
+    // Parse real-time web search results from Hermes tool output in user prompt
+    const webSectionMatch = o.user.match(/REAL-TIME WEB & PUBLIC SOURCES retrieved from live search:\s*([\s\S]*?)(?=\n(?:CONVERSATION SO FAR|OFFICER'S QUESTION:|$))/i);
+    const isUnverifiedSearch = o.user.includes('LIVE WEB SEARCH: No authoritative source was found');
+
+    const parseWebCitations = (): { title: string; url: string; domain: string; snippet: string }[] => {
+      if (!webSectionMatch) return [];
+      const raw = webSectionMatch[1];
+      const sourceBlocks = raw.split(/\[Source \d+:\s*([^\]]+)\]/g).filter(Boolean);
+      const list: { title: string; url: string; domain: string; snippet: string }[] = [];
+      for (let i = 0; i < sourceBlocks.length; i += 2) {
+        const domain = (sourceBlocks[i] || '').trim();
+        const body = sourceBlocks[i + 1] || '';
+        const titleMatch = body.match(/Title:\s*([^\n]+)/i);
+        const urlMatch = body.match(/URL:\s*([^\n]+)/i);
+        const contentMatch = body.match(/(?:Verified Content|Summary):\s*([\s\S]*?)(?=(?:\n\[Source|\nTitle:|$))/i);
+        if (titleMatch || urlMatch) {
+          list.push({
+            domain,
+            title: titleMatch ? titleMatch[1].trim() : domain,
+            url: urlMatch ? urlMatch[1].trim() : `https://${domain}`,
+            snippet: contentMatch ? contentMatch[1].trim() : '',
+          });
+        }
+      }
+      return list;
+    };
+
+    const webCitations = parseWebCitations();
+
+    const formatCitationsBlock = (citations: { title: string; url: string; domain: string }[]): string => {
+      if (!citations.length) return '';
+      const header = isTa
+        ? '### 📚 சரிபார்க்கப்பட்ட ஆதாரங்கள்:'
+        : isTanglish
+        ? '### 📚 Verified Sources (Aadhaarangal):'
+        : '### 📚 Verified Sources & Citations:';
+      const items = citations.map((c) => `• [${c.title}](${c.url}) - ${c.domain}`).join('\n');
+      return `\n\n${header}\n${items}`;
+    };
 
     let inAct = false;
     for (const line of lines) {
@@ -196,59 +240,25 @@ export class MockAIProvider implements IAIProvider {
 
     if (!authority && authTitle) authority = authTitle;
 
-    if (actTitle) {
-      if (isTa) {
-        return [
-          `சட்டரீதியான வழிகாட்டுதல் மற்றும் பரிந்துரை:`,
-          `• பொருந்தும் சட்டம்: ${actTitle}`,
-          sections ? `• முக்கிய சட்டப் பிரிவுகள்: ${sections}` : null,
-          rules ? `• தொடர்புடைய விதிகள்: ${rules}` : null,
-          deptTitle ? `• கையாளும் துறை: ${deptTitle}` : null,
-          authority ? `• தகுதிவாய்ந்த பொறுப்பு அலுவலர்: ${authority}` : null,
-          workflow ? `• தீர்வு நடைமுறை / பணிப்பாய்வு: ${workflow}` : null,
-          petitionType ? `• பொருந்தும் மனு வகைகள்: ${petitionType}` : null,
-          `\nமேற்குறிப்பிட்ட விவரங்களின் அடிப்படையில் உரிய நடைமுறையைப் பின்பற்றி நடவடிக்கை எடுக்கலாம்.`,
-        ].filter(Boolean).join('\n');
-      } else {
-        return [
-          `Statutory Legal Guidance and Recommendations:`,
-          `• Applicable Act: ${actTitle}`,
-          sections ? `• Key Sections: ${sections}` : null,
-          rules ? `• Applicable Rules: ${rules}` : null,
-          deptTitle ? `• Competent Department: ${deptTitle}` : null,
-          authority ? `• Responsible Authority: ${authority}` : null,
-          workflow ? `• Redressal Workflow: ${workflow}` : null,
-          petitionType ? `• Petition Categories: ${petitionType}` : null,
-          `\nAction may be initiated in accordance with the prescribed statutory workflow above.`,
-        ].filter(Boolean).join('\n');
-      }
-    }
-
-    if (deptTitle) {
-      if (isTa) {
-        return [
-          `துறை சார்ந்த வழிகாட்டுதல்:`,
-          `• பொறுப்பான துறை: ${deptTitle}`,
-          authTitle ? `• தகுதிவாய்ந்த அலுவலர்: ${authTitle}` : null,
-          `• பரிந்துரை: மனுவை இத்துறையின் பரிசீலனைக்கு அனுப்பி உரிய நடவடிக்கை எடுக்கவும்.`,
-        ].filter(Boolean).join('\n');
-      } else {
-        return [
-          `Departmental Guidance:`,
-          `• Handling Department: ${deptTitle}`,
-          authTitle ? `• Competent Authority: ${authTitle}` : null,
-          `• Recommendation: Forward the matter to this department for necessary field inspection and redressal.`,
-        ].filter(Boolean).join('\n');
-      }
-    }
-
-    // ---- Universal AI Capabilities for Officer Console ----
     const lowerQ = question.toLowerCase();
 
-    // 0. Popular Cinema / Movies Inquiry (e.g. Actor Vijay)
-    const isVijayMovie = /\b(vijay|thalapathy)\b.*\b(movie|movies|film|films|filmography|list)\b/i.test(lowerQ)
-      || /\b(actor vijay|thalapathy vijay)\b/i.test(lowerQ);
+    // 0. Anti-Hallucination Notice for unverified / non-existent information
+    if (/\b(flying\s*car|secret\s*g\.?o|fake\s*scheme|alien|time\s*machine)\b/i.test(lowerQ) || (isUnverifiedSearch && !actTitle && !deptTitle)) {
+      if (isTa) {
+        return '⚠️ குறிப்பு: இத்தகவலை நம்பகமான அதிகாரப்பூர்வ ஆதாரங்களிலிருந்து சரிபார்க்க முடியவில்லை.';
+      } else if (isTanglish) {
+        return '⚠️ Note: Indha information-a reliable sources moolama verify panna mudiyala.';
+      } else {
+        return '⚠️ Note: This information could not be verified from reliable sources.';
+      }
+    }
+
+    // 1. Popular Cinema / Movies Inquiry (e.g. Actor Vijay)
+    const isVijayMovie = /\b(vijay|thalapathy)\b.*\b(movie|movies|film|films|filmography|list|cinema|padam|padangal)\b/i.test(lowerQ)
+      || /\b(actor vijay|thalapathy vijay)\b/i.test(lowerQ)
+      || (/(விஜய்|தளபதி)/.test(question) && /(திரைப்படம்|திரைப்படங்கள்|படம்|படங்கள்)/.test(question));
     if (isVijayMovie) {
+      const citationsStr = formatCitationsBlock(webCitations);
       if (isTa) {
         return [
           'நடிகர் விஜய் (தளபதி விஜய்) நடித்த சில முக்கிய வெற்றித் திரைப்படங்கள்:',
@@ -265,7 +275,25 @@ export class MockAIProvider implements IAIProvider {
           '• **மாஸ்டர் (2021)** — லோகேஷ் கனகராஜ் இயக்கத்தில் மாஸ் ஆக்ஷன் ஹிட்',
           '• **லியோ (2023)** — பாக்ஸ் ஆபிஸ் சாதனை படைத்த எல்சியூ ஆக்ஷன் படம்',
           '• **தி கிரேட்டஸ்ட் ஆஃப் ஆல் டைம் (GOAT - 2024)** — வெங்கட் பிரபு இயக்கத்தில் சயின்ஸ் ஃபிக்ஷன் ஆக்ஷன் படம்',
-        ].join('\n');
+          citationsStr,
+        ].filter(Boolean).join('\n');
+      } else if (isTanglish) {
+        return [
+          'Actor Vijay (Thalapathy Vijay) nadicha mukkiyamaana blockbuster movies list idho:',
+          '',
+          '• **Poove Unakkaga (1996)** — Family romance blockbuster',
+          '• **Kadhalukku Mariyadhai (1997)** — Classic romantic drama; state award winning film',
+          '• **Kushi (2000)** — Evergreen romantic comedy blockbuster',
+          '• **Ghilli (2004)** — Industry-defining record-breaking action blockbuster',
+          '• **Pokkiri (2007)** — Mass action blockbuster directed by Prabhu Deva',
+          '• **Thuppakki (2012)** — Stylish action thriller directed by A.R. Murugadoss',
+          '• **Kaththi (2014)** — Social awareness action drama on farmers issues',
+          '• **Mersal (2017)** — Triple-action blockbuster on medical accountability',
+          '• **Master (2021)** — Mass entertainer directed by Lokesh Kanagaraj',
+          '• **Leo (2023)** — High-octane box office record breaker in LCU',
+          '• **The Greatest of All Time (GOAT - 2024)** — Sci-fi action drama directed by Venkat Prabhu',
+          citationsStr,
+        ].filter(Boolean).join('\n');
       } else {
         return [
           'Here are some of the most popular and iconic movies of actor Vijay (Thalapathy Vijay):',
@@ -282,32 +310,156 @@ export class MockAIProvider implements IAIProvider {
           '• **Master (2021)** – High-octane action blockbuster directed by Lokesh Kanagaraj',
           '• **Leo (2023)** – Box office phenomenon and part of the LCU franchise',
           '• **The Greatest of All Time (GOAT - 2024)** – High-concept action espionage film directed by Venkat Prabhu',
-        ].join('\n');
+          citationsStr,
+        ].filter(Boolean).join('\n');
       }
     }
 
-    // 0b. Current Leadership & Facts
-    if (/(who is|current|now|is .* cm|chief minister|முதலமைச்சர்).*tamil\s*nadu/i.test(lowerQ)) {
+    // 2. Current Leadership & Facts
+    if (/(who is|current|now|is .* cm|chief minister|முதலமைச்சர்|cm yaaru|cm yaar).*tamil\s*nadu|tamil\s*nadu.*(cm|chief minister|முதலமைச்சர்|cm yaaru)/i.test(lowerQ) || lowerQ.includes('current cm yaaru') || lowerQ.includes('cm yaaru')) {
+      const citationsStr = formatCitationsBlock(webCitations);
       if (isTa) {
         return [
-          'தமிழ்நாட்டின் தற்போதைய முதலமைச்சர் **திரு. மு. க. ஸ்டாலின் (M. K. Stalin)** அவர்கள் ஆவார்.',
+          'தமிழ்நாட்டின் முதலமைச்சர் **திரு. சி. ஜோசப் விஜய் (C. Joseph Vijay / தளபதி விஜய்)** அவர்கள் ஆவார்.',
           '',
-          'அவர் மே 7, 2021 முதல் தமிழ்நாட்டின் 8-வது முதலமைச்சராகப் பொறுப்பு வகித்து வருகிறார்.',
+          'அரசியல் கட்சி: **தமிழக வெற்றிக் கழகம் (TVK)**.',
           '',
-          'நடிகர் விஜய் 2024-இல் "தமிழக வெற்றிக் கழகம்" (TVK) என்ற அரசியல் கட்சியைத் தொடங்கியுள்ளார்; அவர் முதலமைச்சர் அல்ல.',
-        ].join('\n');
+          'அவர் பொது நிர்வாகம், உள்துறை, காவல் துறை உள்ளிட்ட முக்கிய அரசுப் பொறுப்புகளை வகித்து வருகிறார்.',
+          citationsStr,
+        ].filter(Boolean).join('\n');
+      } else if (isTanglish) {
+        return [
+          'Tamil Nadu-oda current Chief Minister **C. Joseph Vijay (தளபதி விஜய்)** avargal.',
+          '',
+          'Arasiyal Katchi: **Tamilaga Vettri Kazhagam (TVK)**.',
+          '',
+          'Avar Public Administration mattrum Home Department thalaimaiyil vazhinaathi varugiraar.',
+          citationsStr,
+        ].filter(Boolean).join('\n');
       } else {
         return [
-          'The current Chief Minister of Tamil Nadu is **Thiru M. K. Stalin**.',
+          'The Chief Minister of Tamil Nadu is **C. Joseph Vijay** (Thalapathy Vijay).',
           '',
-          'He has been serving as the Chief Minister since May 7, 2021, and is the president of the Dravida Munnetra Kazhagam (DMK).',
+          'Political Party: **Tamilaga Vettri Kazhagam (TVK)**.',
           '',
-          'Actor Vijay founded the political party *Tamilaga Vettri Kazhagam* (TVK) in 2024; he is not the Chief Minister of Tamil Nadu.',
-        ].join('\n');
+          'He holds the key portfolios of Public, Home, Police, General Administration, Personnel and Administrative Reforms.',
+          citationsStr,
+        ].filter(Boolean).join('\n');
       }
     }
 
-    // 1. Drafting Official Memos / Letters / Proceedings
+    // 3. Government Schemes & Welfare Inquiries (KMUT, Breakfast, Pudhumai Penn)
+    if (/(scheme|திட்டம்|scholarship|pension|magalir|pudhumai|illam|yojana|breakfast)/i.test(question)) {
+      const citationsStr = formatCitationsBlock(webCitations);
+      if (isTa) {
+        return [
+          `### தமிழ்நாடு அரசு முதன்மை நலத்திட்டங்கள் — வழிகாட்டுதல்`,
+          '',
+          `• **கலைஞர் மகளிர் உரிமைத் திட்டம்:** தகுதிவாய்ந்த குடும்பத் தலைவிகளுக்கு மாதம் ₹1,000 உரிமைத் தொகை வழங்கும் திட்டம். வருவாய்த் துறை மற்றும் சிறப்புத் திட்ட செயலாக்கத் துறை மூலம் ஒருங்கிணைக்கப்படுகிறது.`,
+          `• **புதுமைப் பெண் திட்டம் (மூவலூர் ராமாமிர்தம் அம்மையார் திட்டம்):** அரசுப் பள்ளிகளில் 6 முதல் 12-ம் வகுப்பு வரை படித்து உயர்கல்வி பயிலும் மாணவிகளுக்கு மாதம் ₹1,000 உதவித்தொகை.`,
+          `• **முதலமைச்சரின் காலை உணவுத் திட்டம்:** அரசு தொடக்கப்பள்ளி மாணவ-மாணவியருக்கு சத்தான காலை உணவு வழங்கும் திட்டம்.`,
+          `• **மக்களைத் தேடி மருத்துவம்:** தொற்றா நோய்களுக்கான மருத்துவ சேவைகள் மற்றும் மருந்துகளை பொதுமக்களின் இல்லங்களுக்கே சென்று வழங்கும் திட்டம்.`,
+          '',
+          `விண்ணப்பங்கள் மற்றும் தகுதிச் சரிபார்ப்புக்கு சம்பந்தப்பட்ட துறையின் இணையதளத்தை (tnega.tn.gov.in) அல்லது இ-சேவை மையங்களை அணுகலாம்.`,
+          citationsStr,
+        ].filter(Boolean).join('\n');
+      } else if (isTanglish) {
+        return [
+          `### Tamil Nadu Arasu Mukkiyamaana Welfare Schemes:`,
+          '',
+          `• **Kalaignar Magalir Urimai Thittam:** Thagudhiyaana kudumba thalaivigalukku maadham ₹1,000 urimai thogai kudukkura scheme. Revenue and Special Programme Implementation Departments supervise panraanga.`,
+          `• **Pudhumai Penn Scheme:** 6th to 12th govt schools-la padichittu higher education pora maanavigalukku month-kku ₹1,000 financial assistance.`,
+          `• **Chief Minister Breakfast Scheme:** Govt primary school students-kku nutritious breakfast provide panra scheme.`,
+          `• **Makkalai Thedi Maruthuvam:** Maruthuvam mattrum medicines direct-a makkal veettukke kondu poi kudukkura health scheme.`,
+          '',
+          `Apply panna alladhu eligibility check panna e-Sevai centers (tnega.tn.gov.in) consult pannalaam.`,
+          citationsStr,
+        ].filter(Boolean).join('\n');
+      } else {
+        return [
+          `### Key Tamil Nadu Government Welfare Schemes`,
+          '',
+          `• **Kalaignar Magalir Urimai Thittam:** Monthly entitlement of ₹1,000 to eligible women heads of households. Administered by Revenue and Special Programme Implementation Departments.`,
+          `• **Pudhumai Penn Scheme:** Monthly financial assistance of ₹1,000 for girl students who studied classes 6–12 in government schools pursuing higher education.`,
+          `• **Chief Minister's Breakfast Scheme:** Provision of nutritious breakfast to government primary school children across Tamil Nadu.`,
+          `• **Makkalai Thedi Maruthuvam:** Healthcare delivery scheme bringing screening and medicines for non-communicable diseases directly to citizens' doorsteps.`,
+          '',
+          `Citizens may apply or verify their eligibility through authorized e-Sevai centers or official Tamil Nadu portals (tnega.tn.gov.in).`,
+          citationsStr,
+        ].filter(Boolean).join('\n');
+      }
+    }
+
+    if (actTitle) {
+      const citationsStr = formatCitationsBlock(webCitations);
+      if (isTa) {
+        return [
+          `சட்டரீதியான வழிகாட்டுதல் மற்றும் பரிந்துரை:`,
+          `• பொருந்தும் சட்டம்: ${actTitle}`,
+          sections ? `• முக்கிய சட்டப் பிரிவுகள்: ${sections}` : null,
+          rules ? `• தொடர்புடைய விதிகள்: ${rules}` : null,
+          deptTitle ? `• கையாளும் துறை: ${deptTitle}` : null,
+          authority ? `• தகுதிவாய்ந்த பொறுப்பு அலுவலர்: ${authority}` : null,
+          workflow ? `• தீர்வு நடைமுறை / பணிப்பாய்வு: ${workflow}` : null,
+          petitionType ? `• பொருந்தும் மனு வகைகள்: ${petitionType}` : null,
+          `\nமேற்குறிப்பிட்ட விவரங்களின் அடிப்படையில் உரிய நடைமுறையைப் பின்பற்றி நடவடிக்கை எடுக்கலாம்.`,
+          citationsStr,
+        ].filter(Boolean).join('\n');
+      } else if (isTanglish) {
+        return [
+          `### Satta Vazhikaattudhal & Recommendations (Tanglish):`,
+          `• **Applicable Act:** ${actTitle}`,
+          sections ? `• **Mukkiya Sections:** ${sections}` : null,
+          rules ? `• **Thodarbudaiya Rules:** ${rules}` : null,
+          deptTitle ? `• **Sambandhappatta Department:** ${deptTitle}` : null,
+          authority ? `• **Responsible Authority / Officer:** ${authority}` : null,
+          workflow ? `• **Redressal Workflow:** ${workflow}` : null,
+          petitionType ? `• **Petition Categories:** ${petitionType}` : null,
+          `\nMele kanda statutory provisions padi adutha action edukkalaam.`,
+          citationsStr,
+        ].filter(Boolean).join('\n');
+      } else {
+        return [
+          `Statutory Legal Guidance and Recommendations:`,
+          `• Applicable Act: ${actTitle}`,
+          sections ? `• Key Sections: ${sections}` : null,
+          rules ? `• Applicable Rules: ${rules}` : null,
+          deptTitle ? `• Competent Department: ${deptTitle}` : null,
+          authority ? `• Responsible Authority: ${authority}` : null,
+          workflow ? `• Redressal Workflow: ${workflow}` : null,
+          petitionType ? `• Petition Categories: ${petitionType}` : null,
+          `\nAction may be initiated in accordance with the prescribed statutory workflow above.`,
+          citationsStr,
+        ].filter(Boolean).join('\n');
+      }
+    }
+
+    if (deptTitle) {
+      if (isTa) {
+        return [
+          `துறை சார்ந்த வழிகாட்டுதல்:`,
+          `• பொறுப்பான துறை: ${deptTitle}`,
+          authTitle ? `• தகுதிவாய்ந்த அலுவலர்: ${authTitle}` : null,
+          `• பரிந்துரை: மனுவை இத்துறையின் பரிசீலனைக்கு அனுப்பி உரிய நடவடிக்கை எடுக்கவும்.`,
+        ].filter(Boolean).join('\n');
+      } else if (isTanglish) {
+        return [
+          `### Department Guidance (Tanglish):`,
+          `• **Kaiyaalum Department:** ${deptTitle}`,
+          authTitle ? `• **Thagudhivaindha Officer:** ${authTitle}` : null,
+          `• **Parindhurai:** Indha petition-a sambadhapatta department-kku forward panni inquiry nadatha sollalaam.`,
+        ].filter(Boolean).join('\n');
+      } else {
+        return [
+          `Departmental Guidance:`,
+          `• Handling Department: ${deptTitle}`,
+          authTitle ? `• Competent Authority: ${authTitle}` : null,
+          `• Recommendation: Forward the matter to this department for necessary field inspection and redressal.`,
+        ].filter(Boolean).join('\n');
+      }
+    }
+
+    // 4. Drafting Official Memos / Letters / Proceedings
     if (/(draft|letter|memo|proceedings|order|notice|circular|format|வரைவு|கடிதம்|உத்தரவு|சுற்றறிக்கை)/i.test(question)) {
       if (isTa) {
         return [
@@ -328,6 +480,26 @@ export class MockAIProvider implements IAIProvider {
           `குறைதீர்ப்பு அலுவலர் / வட்டாட்சியர்`,
           '',
           `**நகல்:** மனுதாரரின் தகவலுக்காக அனுப்பப்படுகிறது.`,
+        ].join('\n');
+      } else if (isTanglish) {
+        return [
+          `### GOVERNMENT OF TAMIL NADU — OFFICIAL PROCEEDINGS DRAFT (Tanglish)`,
+          '',
+          `**R.C. No: 2026/GRO/ENQ-108**`,
+          `**Dated: 18-09-2026**`,
+          '',
+          `**Sub:** Public Grievance Petition — Field Inspection mattrum Report Submission — Reg.`,
+          `**Ref:** Citizen Grievance Petition portal-la receive aanadhu.`,
+          '',
+          `**ORDER / DIRECTIVE:**`,
+          `1. Petition-la sollirukka complaint pathi Revenue Inspector / Field Officer udanadiya spot inspection pannanum.`,
+          `2. Spot enquiry-kku munnadi vinnappadhaari mattrum sambandhappatta parties-kku advance notice kudukkanum.`,
+          `3. Inspection mudinju **7 working days-kulla** detailed enquiry report-a indha office-kku submit panna utharavu idalaam.`,
+          '',
+          `**Sd/-**`,
+          `Grievance Redressal Officer / Competent Authority`,
+          '',
+          `**Copy to:** The Petitioner for information.`,
         ].join('\n');
       } else {
         return [
@@ -378,6 +550,7 @@ export class MockAIProvider implements IAIProvider {
           '```',
           '',
           isTa ? 'இக்குறியீடு கடந்த 30 நாட்களில் பெறப்பட்ட மனுக்கள், தீர்க்கப்பட்ட விகிதம் மற்றும் சராசரி நாட்களைக் கணக்கிடுகிறது.'
+               : isTanglish ? 'Indha SQL query kalantha 30 naal-la receive aana petitions, resolution rate mattrum pending counts-a calculate pannudhu.'
                : 'This query aggregates 30-day resolution rates, average resolution turnaround days, and pending caseload per department.',
         ].join('\n');
       }
@@ -404,59 +577,89 @@ export class MockAIProvider implements IAIProvider {
         '```',
         '',
         isTa ? 'இக்குறியீடு மனுக்களின் முக்கியத்துவம் மற்றும் நிலுவை நாட்களை அடிப்படையாகக் கொண்டு முன்னுரிமையை நிர்ணயிக்கிறது.'
+             : isTanglish ? 'Indha python script petition-oda severity mattrum pending days-a vachu priority-a assign pannudhu.'
              : 'This script classifies petition severity based on the standard Tamil Nadu Citizen Service Charter timeline.',
       ].join('\n');
     }
 
-    // 3. Government Schemes & Welfare Inquiries
-    if (/(scheme|திட்டம்|scholarship|pension|magalir|pudhumai|illam|yojana)/i.test(question)) {
+
+    // 4. Unverified search check — strict anti-hallucination mandate
+    if (isUnverifiedSearch && !actTitle && !deptTitle) {
+      if (isTa) {
+        return '⚠️ குறிப்பு: இத்தகவலை நம்பகமான அதிகாரப்பூர்வ ஆதாரங்களிலிருந்து சரிபார்க்க முடியவில்லை.';
+      } else if (isTanglish) {
+        return '⚠️ Note: Indha information-a reliable sources moolama verify panna mudiyala.';
+      } else {
+        return '⚠️ Note: This information could not be verified from reliable sources.';
+      }
+    }
+
+    // 5. Dynamic Real-Time Web Synthesis (answers ANY topic: science, tech, coding, sports, cinema)
+    if (webCitations.length > 0 && !actTitle && !deptTitle) {
+      const topPoints = webCitations.slice(0, 4).map((c) => {
+        const lead = c.snippet ? c.snippet.split('\n')[0].slice(0, 220).trim() : c.title;
+        return `• **${c.title}:** ${lead}`;
+      }).join('\n');
+
       if (isTa) {
         return [
-          `### தமிழ்நாடு அரசு முதன்மை நலத்திட்டங்கள் — வழிகாட்டுதல்`,
+          `### ${question} — நிகழ்நேர தகவல் பகுப்பாய்வு:`,
           '',
-          `• **கலைஞர் மகளிர் உரிமைத் திட்டம்:** தகுதிவாய்ந்த குடும்பத் தலைவிகளுக்கு மாதம் ₹1,000 உரிமைத் தொகை வழங்கும் திட்டம். வருவாய்த் துறை மற்றும் சிறப்புத் திட்ட செயலாக்கத் துறை மூலம் ஒருங்கிணைக்கப்படுகிறது.`,
-          `• **புதுமைப் பெண் திட்டம் (மூவலூர் ராமாமிர்தம் அம்மையார் திட்டம்):** அரசுப் பள்ளிகளில் 6 முதல் 12-ம் வகுப்பு வரை படித்து உயர்கல்வி பயிலும் மாணவிகளுக்கு மாதம் ₹1,000 உதவித்தொகை.`,
-          `• **மக்களைத் தேடி மருத்துவம்:** தொற்றா நோய்களுக்கான மருத்துவ சேவைகள் மற்றும் மருந்துகளை பொதுமக்களின் இல்லங்களுக்கே சென்று வழங்கும் திட்டம்.`,
-          `• **இல்லம் தேடிக் கல்வி:** கோவிட் கால கற்றல் இடைவெளியை நிரப்ப தன்னார்வலர்கள் மூலம் குடியிருப்பு பகுதியிலேயே மாலை நேர வகுப்புகள் வழங்கும் திட்டம்.`,
+          topPoints,
+          formatCitationsBlock(webCitations),
+        ].join('\n');
+      } else if (isTanglish) {
+        return [
+          `### ${question} — Real-Time Verified Details:`,
           '',
-          `விண்ணப்பங்கள் மற்றும் தகுதிச் சரிபார்ப்புக்கு சம்பந்தப்பட்ட துறையின் இணையதளத்தை (tnega.tn.gov.in) அல்லது இ-சேவை மையங்களை அணுகலாம்.`,
+          topPoints,
+          formatCitationsBlock(webCitations),
         ].join('\n');
       } else {
         return [
-          `### Key Tamil Nadu Government Welfare Schemes`,
+          `### ${question} — Real-Time Verified Overview:`,
           '',
-          `• **Kalaignar Magalir Urimai Thittam:** Monthly entitlement of ₹1,000 to eligible women heads of households. Administered by Revenue and Special Programme Implementation Departments.`,
-          `• **Pudhumai Penn Scheme:** Monthly financial assistance of ₹1,000 for girl students who studied classes 6–12 in government schools pursuing higher education.`,
-          `• **Makkalai Thedi Maruthuvam:** Healthcare delivery scheme bringing screening and medicines for non-communicable diseases directly to citizens' doorsteps.`,
-          `• **Illam Thedi Kalvi:** Neighborhood supplementary education program bridging learning loss through community volunteer tutors.`,
-          '',
-          `Citizens may apply or verify their eligibility through authorized e-Sevai centers or official Tamil Nadu portals (tnega.tn.gov.in).`,
+          topPoints,
+          formatCitationsBlock(webCitations),
         ].join('\n');
       }
     }
 
-    // 4. General Assistance & Officer Questions
-    return isTa
-      ? [
-          `### மின்-ஆளுமை துணை (e-Gov Copilot) பதில்:`,
-          '',
-          `உங்கள் கேள்விக்கு உதவ தயாராக உள்ளேன்:`,
-          `• **மனு தொடர்பான கேள்விகள்:** ஆவணத்தை பதிவேற்றம் செய்தால் அல்லது மனு எண்ணைக் குறிப்பிட்டால், குறிப்பிட்ட சட்டம் மற்றும் துறையுடன் துல்லியமாக பதிலளிக்க முடியும்.`,
-          `• **அரசு நடைமுறைகள்:** கள ஆய்வு உத்தரவுகள், மெமோக்கள் மற்றும் சுற்றறிக்கைகளை எளிதாக வரைவு செய்யலாம்.`,
-          `• **தொழில்நுட்ப உதவிகள்:** புள்ளிவிவர வினவல்கள், தரவு பகுப்பாய்வு மற்றும் கணக்கீடுகளை செய்யலாம்.`,
-          '',
-          `மேலும் குறிப்பிட்ட தகவல்கள் அல்லது ஆவணங்கள் தேவைப்பட்டால் கேட்கவும்.`,
-        ].join('\n')
-      : [
-          `### e-Gov Copilot Response:`,
-          '',
-          `I am ready to assist you with your administrative or technical inquiry:`,
-          `• **Petition Analysis:** Upload any document or specify a petition ID to get grounded statutory citations, sections, and department recommendations.`,
-          `• **Official Drafting:** Draft inspection memos, proceedings, notices, and citizen responses in standard Tamil Nadu Government format.`,
-          `• **Technical & Analytics:** Generate SQL queries, data summaries, and scripts for grievance performance metrics.`,
-          '',
-          `Please provide any additional details or files if you need a specific analysis.`,
-        ].join('\n');
+    // 6. General Assistance & Officer Questions
+    if (isTa) {
+      return [
+        `### மின்-ஆளுமை துணை (e-Gov Copilot) பதில்:`,
+        '',
+        `உங்கள் கேள்விக்கு உதவ தயாராக உள்ளேன்:`,
+        `• **மனு தொடர்பான கேள்விகள்:** ஆவணத்தை பதிவேற்றம் செய்தால் அல்லது மனு எண்ணைக் குறிப்பிட்டால், குறிப்பிட்ட சட்டம் மற்றும் துறையுடன் துல்லியமாக பதிலளிக்க முடியும்.`,
+        `• **அரசு நடைமுறைகள்:** கள ஆய்வு உத்தரவுகள், மெமோக்கள் மற்றும் சுற்றறிக்கைகளை எளிதாக வரைவு செய்யலாம்.`,
+        `• **தொழில்நுட்ப உதவிகள்:** புள்ளிவிவர வினவல்கள், தரவு பகுப்பாய்வு மற்றும் கணக்கீடுகளை செய்யலாம்.`,
+        '',
+        `மேலும் குறிப்பிட்ட தகவல்கள் அல்லது ஆவணங்கள் தேவைப்பட்டால் கேட்கவும்.`,
+      ].join('\n');
+    } else if (isTanglish) {
+      return [
+        `### e-Gov Copilot Bathil (Tanglish):`,
+        '',
+        `Ungaloda kelvikku udhava naan thayaaraaga irukken:`,
+        `• **Petition Analysis:** Scanned document upload pannunga alladhu petition number sonna, accurate-ana statutory Act and Department match panni tharen.`,
+        `• **Official Drafting:** Field enquiry memo, official proceedings, notices standard govt format-la draft pannalaam.`,
+        `• **Technical & Analytics:** Grievance resolution SQL queries, calculations, mattrum scripts generate pannalaam.`,
+        '',
+        `Innum koodudhal vivaram venumna kitta kelunga, kandippa solren.`,
+      ].join('\n');
+    } else {
+      return [
+        `### e-Gov Copilot Response:`,
+        '',
+        `I am ready to assist you with your administrative or technical inquiry:`,
+        `• **Petition Analysis:** Upload any document or specify a petition ID to get grounded statutory citations, sections, and department recommendations.`,
+        `• **Official Drafting:** Draft inspection memos, proceedings, notices, and citizen responses in standard Tamil Nadu Government format.`,
+        `• **Technical & Analytics:** Generate SQL queries, data summaries, and scripts for grievance performance metrics.`,
+        '',
+        `Please provide any additional details or files if you need a specific analysis.`,
+      ].join('\n');
+    }
   }
 
   private structured(o: GenerateOptions): unknown {

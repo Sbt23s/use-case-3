@@ -81,6 +81,66 @@ const KNOWN_TA_TO_EN: Record<string, string> = {
   'திரு': 'Thiru',
   'செல்வி': 'Selvi',
   'எண்': 'No',
+  'ஹரீஷ்': 'Hareesh',
+  'ஹரிஷ்': 'Harish',
+  'ஹரீஸ்': 'Hareesh',
+
+  // Localities, areas and towns
+  'காந்திபுரம்': 'Gandhipuram',
+  'சித்தாப்புதூர்': 'Siddhapudur',
+  'சித்தாபுதூர்': 'Siddhapudur',
+  'சத்தாப்பூர்': 'Siddhapudur',
+  'இத்தாப்பூர்': 'Siddhapudur',
+  'சிங்காநல்லூர்': 'Singanallur',
+  'சரவணம்பட்டி': 'Saravanampatti',
+  'துடியலூர்': 'Thudiyalur',
+  'கவுண்டம்பாளையம்': 'Koundampalayam',
+  'வடவள்ளி': 'Vadavalli',
+  'குனியமுத்தூர்': 'Kuniyamuthur',
+  'போத்தனூர்': 'Podanur',
+  'உக்கடம்': 'Ukkadam',
+  'சாய்பாபா காலனி': 'Saibaba Colony',
+  'அன்னூர்': 'Annur',
+  'மேட்டுப்பாளையம்': 'Mettupalayam',
+  'பொள்ளாச்சி': 'Pollachi',
+  'சூலூர்': 'Sulur',
+  'கிணத்துக்கடவு': 'Kinathukadavu',
+  'வால்பாறை': 'Valparai',
+  'கோவை': 'Coimbatore',
+  'கோயமுத்தூர்': 'Coimbatore',
+  'வேளச்சேரி': 'Velachery',
+  'தாம்பரம்': 'Tambaram',
+  'அடையாறு': 'Adyar',
+  'மயிலாப்பூர்': 'Mylapore',
+  'கிண்டி': 'Guindy',
+  'கோயம்பேடு': 'Koyambedu',
+  'ஆவடி': 'Avadi',
+  'அம்பத்தூர்': 'Ambattur',
+  'சோழிங்கநல்லூர்': 'Sholinganallur',
+  'ஆலந்தூர்': 'Alandur',
+  'பல்லாவரம்': 'Pallavaram',
+  'குரோம்பேட்டை': 'Chromepet',
+  'போரூர்': 'Porur',
+  'திருவான்மியூர்': 'Thiruvanmiyur',
+  'எழும்பூர்': 'Egmore',
+  'ராயப்பேட்டை': 'Royapettah',
+  'புரசைவாக்கம்': 'Purasawalkam',
+  'திருவல்லிக்கேணி': 'Triplicane',
+  'மாம்பலம்': 'Mambalam',
+  'சைதாப்பேட்டை': 'Saidapet',
+  'கோடம்பாக்கம்': 'Kodambakkam',
+  'வடபழனி': 'Vadapalani',
+  'அசோக் நகர்': 'Ashok Nagar',
+  'நுங்கம்பாக்கம்': 'Nungambakkam',
+  'வில்லிவாக்கம்': 'Villivakkam',
+  'கொளத்தூர்': 'Kolathur',
+  'மாதவரம்': 'Madhavaram',
+  'திருவொற்றியூர்': 'Tiruvottiyur',
+  'செங்கல்பட்டு': 'Chengalpattu',
+  'வீதி': 'Street',
+  'சந்து': 'Lane',
+  'குறுக்கு': 'Cross',
+  'முதன்மை': 'Main',
 };
 
 export const KNOWN_EN_TO_TA: Record<string, string> = {
@@ -191,9 +251,59 @@ export const KNOWN_EN_TO_TA: Record<string, string> = {
   'perambalur': 'பெரம்பலூர்',
   'nilgiris': 'நீலகிரி',
   'kanchipuram': 'காஞ்சிபுரம்',
-  'tiruvallur': 'திருவள்ளூர்',
   'tiruvannamalai': 'திருவண்ணாமலை',
   'peelamedu': 'பீளமேடு',
+  'gandhipuram': 'காந்திபுரம்',
+  'siddhapudur': 'சித்தாப்புதூர்',
+  'siddhaputhur': 'சித்தாப்புதூர்',
+  'sidhapudur': 'சித்தாப்புதூர்',
+  'chaththappoor': 'சித்தாப்புதூர்',
+  'kanthipuram': 'காந்திபுரம்',
+  'saibaba colony': 'சாய்பாபா காலனி',
+  'singanallur': 'சிங்காநல்லூர்',
+  'saravanampatti': 'சரவணம்பட்டி',
+  'thudiyalur': 'துடியலூர்',
+  'koundampalayam': 'கவுண்டம்பாளையம்',
+  'vadavalli': 'வடவள்ளி',
+  'kuniyamuthur': 'குனியமுத்தூர்',
+  'podanur': 'போத்தனூர்',
+  'ukkadam': 'உக்கடம்',
+  'annur': 'அன்னூர்',
+  'mettupalayam': 'மேட்டுப்பாளையம்',
+  'pollachi': 'பொள்ளாச்சி',
+  'sulur': 'சூலூர்',
+  'kinathukadavu': 'கிணத்துக்கடவு',
+  'valparai': 'வால்பாறை',
+  'kovai': 'கோயம்புத்தூர்',
+  'velachery': 'வேளச்சேரி',
+  'tambaram': 'தாம்பரம்',
+  'adyar': 'அடையாறு',
+  'mylapore': 'மயிலாப்பூர்',
+  'guindy': 'கிண்டி',
+  'koyambedu': 'கோயம்பேடு',
+  'avadi': 'ஆவடி',
+  'ambattur': 'அம்பத்தூர்',
+  'sholinganallur': 'சோழிங்கநல்லூர்',
+  'alandur': 'ஆலந்தூர்',
+  'pallavaram': 'பல்லாவரம்',
+  'chromepet': 'குரோம்பேட்டை',
+  'porur': 'போரூர்',
+  'thiruvanmiyur': 'திருவான்மியூர்',
+  'egmore': 'எழும்பூர்',
+  'royapettah': 'ராயப்பேட்டை',
+  'purasawalkam': 'புரசைவாக்கம்',
+  'triplicane': 'திருவல்லிக்கேணி',
+  'mambalam': 'மாம்பலம்',
+  'saidapet': 'சைதாப்பேட்டை',
+  'kodambakkam': 'கோடம்பாக்கம்',
+  'vadapalani': 'வடபழனி',
+  'ashok nagar': 'அசோக் நகர்',
+  'nungambakkam': 'நுங்கம்பாக்கம்',
+  'villivakkam': 'வில்லிவாக்கம்',
+  'kolathur': 'கொளத்தூர்',
+  'madhavaram': 'மாதவரம்',
+  'tiruvottiyur': 'திருவொற்றியூர்',
+  'chengalpattu': 'செங்கல்பட்டு',
 
   // Common Tamil names
   'gandhi': 'காந்தி',
@@ -415,8 +525,31 @@ export function transliterateToLatin(input: unknown): string {
     .join('');
 }
 
+export function cleanNameString(s: string): string {
+  let cleaned = String(s || '').trim()
+    .replace(/^\s*(?:திருமதி|திரு|செல்வி|செல்வன்)\s*\.?\s*/, '')
+    .replace(/^\s*(?:Thiru|Tmt|Selvi|Mr|Mrs|Ms|Dr)\s*\.?\s*/i, '');
+  if (/என்\s*பெயர்/i.test(cleaned)) {
+    const parts = cleaned.split(/[.。,，;:]|\bஎன்\s*பெயர்\b/i).map((p) => p.trim()).filter(Boolean);
+    const valid = parts
+      .map((p) => p.replace(/^என்\s*பெயர்\s*[:：]?\s*/i, '').trim())
+      .filter((p) => p.length >= 2);
+    if (valid.length > 0) cleaned = valid[0];
+  }
+  if (/my\s*name\s*is/i.test(cleaned)) {
+    const parts = cleaned.split(/[.。,，;:]|\bmy\s*name\s*is\b/i).map((p) => p.trim()).filter(Boolean);
+    const valid = parts
+      .map((p) => p.replace(/^my\s*name\s*is\s*[:：]?\s*/i, '').trim())
+      .filter((p) => p.length >= 2);
+    if (valid.length > 0) cleaned = valid[0];
+  }
+  return cleaned.trim();
+}
+
 export function displayName(name: unknown, lang: 'en' | 'ta'): string {
-  const s = String(name ?? '').trim();
+  const raw = String(name ?? '').trim();
+  if (!raw) return '';
+  const s = cleanNameString(raw);
   if (!s) return '';
   if (lang === 'ta') {
     return hasTamil(s) ? s : transliterateToTamil(s);
@@ -428,7 +561,14 @@ export function displayAddress(address: unknown, lang: 'en' | 'ta'): string {
   const s = String(address ?? '').trim();
   if (!s) return '';
   if (lang === 'ta') {
-    return hasTamil(s) ? s : transliterateToTamil(s);
+    let ta = hasTamil(s) ? s : transliterateToTamil(s);
+    ta = ta.replace(/சத்தாப்பூர்/g, 'சித்தாப்புதூர்')
+           .replace(/இத்தாப்பூர்/g, 'சித்தாப்புதூர்')
+           .replace(/சித்தாபுதூர்/g, 'சித்தாப்புதூர்');
+    return ta;
   }
-  return hasTamil(s) ? transliterateToLatin(s) : s;
+  let en = hasTamil(s) ? transliterateToLatin(s) : s;
+  en = en.replace(/\bChaththappoor\b|\bChiththapputhoor\b|\bIththappoor\b|\bSathappur\b|\bSathapur\b/gi, 'Siddhapudur')
+         .replace(/\bKanthipuram\b/gi, 'Gandhipuram');
+  return en;
 }

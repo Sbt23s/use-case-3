@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { pocApi, fmtTime, pct, STATUS_LABEL } from './pocApi';
 import { useI18n } from '../lib/i18n';
 import { displayName } from '../lib/translit';
+import { GovernmentLogoLoader } from './GovernmentLogoLoader';
 
 /**
  * Government Grievance Officer dashboard.
@@ -32,6 +33,10 @@ export function OfficerDashboard({ feed, live, onOpen, searchQ = '', onClearSear
   const [err, setErr] = useState('');
   const [fresh, setFresh] = useState<Set<number>>(new Set());
   const [showUpload, setShowUpload] = useState(false);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, [showUpload]);
 
   const reqIdRef = useRef(0);
 
@@ -197,13 +202,11 @@ export function OfficerDashboard({ feed, live, onOpen, searchQ = '', onClearSear
               <tbody>
                 {busy && rows.length === 0 ? (
                   <tr>
-                    <td colSpan={6} style={{ textAlign: 'center', padding: '56px 20px' }}>
-                      <div className="empty" style={{ margin: 0 }}>
-                        <span className="spin" />
-                        <div style={{ marginTop: 10, color: '#64748b', fontSize: 13 }}>
-                          {lang === 'ta' ? 'மனுக்கள் தேடப்படுகின்றன...' : 'Searching petitions...'}
-                        </div>
-                      </div>
+                    <td colSpan={6} style={{ textAlign: 'center', padding: '40px 20px' }}>
+                      <GovernmentLogoLoader
+                        size="md"
+                        label={lang === 'ta' ? 'மனுக்கள் தேடப்படுகின்றன...' : 'Searching petitions...'}
+                      />
                     </td>
                   </tr>
                 ) : rows.length === 0 ? (
@@ -288,7 +291,9 @@ export function OfficerDashboard({ feed, live, onOpen, searchQ = '', onClearSear
 
                           </>
                         ) : p.analysis_status === 'PROCESSING' ? (
-                          <span className="muted"><span className="spin" /> {t('dash.analysingText')}</span>
+                          <span className="muted" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                            <GovernmentLogoLoader size="xs" inline /> {t('dash.analysingText')}
+                          </span>
                         ) : p.analysis_status === 'FAILED' ? (
                           <span className="poc-chip err">{t('dash.analysisFailed')}</span>
                         ) : (
@@ -522,8 +527,8 @@ function UploadPetitionForm({
         </div>
         <div className="poc-card">
           <div className="body" style={{ padding: 32, textAlign: 'center' }}>
-            <span className="spin" style={{ width: 32, height: 32, marginBottom: 16 }} />
-            <p className="b" style={{ fontSize: 16 }}>{PHASES[phase] ?? t('dash.processing')}</p>
+            <GovernmentLogoLoader size="md" />
+            <p className="b" style={{ fontSize: 16, marginTop: 8 }}>{PHASES[phase] ?? t('dash.processing')}</p>
             {created && (
               <p className="small muted">
                 {t('dash.reference')}: <span className="mono">{created.ref}</span>

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { pct } from './pocApi';
 import { useI18n } from '../lib/i18n';
 import { displayName, displayAddress, transliterate, transliterateToTamil, hasTamil, hasLatin, KNOWN_EN_TO_TA } from '../lib/translit';
+import { GovernmentLogoLoader } from './GovernmentLogoLoader';
 
 /**
  * AI analysis result, in Tamil and English.
@@ -100,15 +101,18 @@ export function AISummaryCard({ d }: { d: any }) {
             {pct(full.overall_confidence)}
           </span>
         ) : isPending ? (
-          <span className="poc-chip ai">
-            <span className="spin" /> {lang === 'ta' ? 'பகுப்பாய்வு நடக்கிறது...' : 'Analysing...'}
+          <span className="poc-chip ai" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+            <GovernmentLogoLoader size="xs" inline /> {lang === 'ta' ? 'பகுப்பாய்வு நடக்கிறது...' : 'Analysing...'}
           </span>
         ) : null}
       </header>
       <div className="body">
         {isPending && !full ? (
-          <div className="empty">
-            <span className="spin" /> {lang === 'ta' ? 'ஆவணம் பகுப்பாய்வு செய்யப்படுகிறது...' : 'Analysing document in real-time...'}
+          <div className="empty" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', padding: '24px 0' }}>
+            <GovernmentLogoLoader
+              size="sm"
+              label={lang === 'ta' ? 'ஆவணம் பகுப்பாய்வு செய்யப்படுகிறது...' : 'Analysing document in real-time...'}
+            />
           </div>
         ) : full ? (
           <>

@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { pocApi, fmtTime, pct, getPocToken } from './pocApi';
 import { useI18n } from '../lib/i18n';
-import { transliterate, hasTamil, hasLatin, displayName, displayAddress } from '../lib/translit';
+import { transliterate, hasTamil, hasLatin, displayName, displayAddress, cleanNameString } from '../lib/translit';
 import { AnalysisPanel, AISummaryCard } from './AnalysisPanel';
 import { WorkflowStages } from './WorkflowStages';
+import { GovernmentLogoLoader } from './GovernmentLogoLoader';
 
 /**
  * Officer petition workspace: the original letter, the extracted text, and the AI
@@ -42,6 +43,12 @@ export function PetitionDetail({ petitionId, feed, onBack }: {
   }, [petitionId, lang]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    return () => {
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    };
+  }, []);
 
   // Refresh when a live event concerns this petition (e.g. OCR finishing).
   useEffect(() => {
@@ -171,7 +178,11 @@ export function PetitionDetail({ petitionId, feed, onBack }: {
   };
 
   if (err && !d) return <div className="poc-note err">{err}</div>;
-  if (!d) return <div className="poc-card"><div className="empty"><span className="spin" /></div></div>;
+  if (!d) return (
+    <div className="poc-card" style={{ padding: '3.5rem 1rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <GovernmentLogoLoader size="md" label={t('common.loading')} />
+    </div>
+  );
 
   const p = d.petition;
   const analysed = p.analysis_status === 'COMPLETED' && d.analysis;
@@ -196,7 +207,6 @@ export function PetitionDetail({ petitionId, feed, onBack }: {
       <div className="poc-head">
         <div className="grow">
           <h1><span className="mono">{p.reference_no}</span></h1>
-          <div className="lede">{p.subject_display || p.subject}</div>
         </div>
         <span className={`poc-chip ${p.status === 'CLOSED' ? 'ok' : ''}`}>
           {t('status.' + p.status)}
@@ -233,9 +243,9 @@ export function PetitionDetail({ petitionId, feed, onBack }: {
                 <div className="body">
                   <div className="empty">
                     <p>{t('detail.notAnalysed')}</p>
-                    <button className="btn primary" disabled={!!busy} onClick={analyse}>
+                    <button className="btn primary" disabled={!!busy} onClick={analyse} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                       {busy === 'analyse'
-                        ? <><span className="spin" /> {t('detail.analysing')}</>
+                        ? <><GovernmentLogoLoader size="xs" inline /> {t('detail.analysing')}</>
                         : t('detail.runAnalysis')}
                     </button>
                   </div>
@@ -272,15 +282,15 @@ export function PetitionDetail({ petitionId, feed, onBack }: {
                     <dt>{t('ai.priority')}</dt>
                     <dd><span className="poc-chip">{t(`prio.${d.analysis.priority}`)}</span></dd>
                   </dl>
-                  <button className="btn sm mt" disabled={!!busy} onClick={analyse}>
-                    {busy === 'analyse' ? <span className="spin" /> : null} {t('ai.rerun')}
+                  <button className="btn sm mt" disabled={!!busy} onClick={analyse} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    {busy === 'analyse' ? <GovernmentLogoLoader size="xs" inline /> : null} {t('ai.rerun')}
                   </button>
                 </>
               ) : (
                 <>
                   <p className="small muted">{t('ai.none')}</p>
-                  <button className="btn primary" disabled={!!busy} onClick={analyse} style={{ width: '100%' }}>
-                    {busy === 'analyse' ? <><span className="spin" /> {t('detail.analysing')}</> : t('detail.runAnalysis')}
+                  <button className="btn primary" disabled={!!busy} onClick={analyse} style={{ width: '100%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                    {busy === 'analyse' ? <><GovernmentLogoLoader size="xs" inline /> {t('detail.analysing')}</> : t('detail.runAnalysis')}
                   </button>
                 </>
               )}
@@ -393,16 +403,6 @@ function LetterTab({ d, onRefresh }: { d: any; onRefresh: () => void }) {
 
   return (
     <>
-      <div className="poc-card">
-        <header><h3>{t('detail.asSubmitted')}</h3></header>
-        <div className="body">
-          <dl className="kv">
-            <dt>{t('detail.subject')}</dt><dd className="b">{d.petition.subject_display || d.petition.subject}</dd>
-            <dt>{t('detail.description')}</dt><dd style={{ whiteSpace: 'pre-wrap' }}>{d.petition.description_display || d.petition.description}</dd>
-          </dl>
-        </div>
-      </div>
-
       {/*
         * The uploaded document, as one attachment card.
         */}
@@ -447,7 +447,9 @@ function LetterTab({ d, onRefresh }: { d: any; onRefresh: () => void }) {
                         <span className="name">{x.file_name || x.title}</span>
                         <span className="sub">
                           {reading ? (
-                            <><span className="spin" /> {t('doc.reading')}</>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                              <GovernmentLogoLoader size="xs" inline /> {t('doc.reading')}
+                            </span>
                           ) : (
                             <>
                               <span className={`dot ${x.ocr_status === 'COMPLETED' ? 'ok' : 'warn'}`} />
@@ -510,7 +512,9 @@ function LetterTab({ d, onRefresh }: { d: any; onRefresh: () => void }) {
                   {previewErr ? (
                     <div className="poc-note err">{previewErr}</div>
                   ) : !blobUrl ? (
-                    <div className="empty"><span className="spin" /> {t('common.loading')}</div>
+                    <div style={{ padding: '2rem 1rem' }}>
+                      <GovernmentLogoLoader size="sm" label={t('common.loading')} />
+                    </div>
                   ) : (
                     <div className="poc-preview">
                       {doc.mime_type?.startsWith('image/') ? (
@@ -605,7 +609,9 @@ function LetterTab({ d, onRefresh }: { d: any; onRefresh: () => void }) {
               {previewErr ? (
                 <div className="poc-note err">{previewErr}</div>
               ) : !blobUrl ? (
-                <div className="empty"><span className="spin" /> {t('common.loading')}</div>
+                <div style={{ padding: '3rem 1rem' }}>
+                  <GovernmentLogoLoader size="md" label={t('common.loading')} />
+                </div>
               ) : modalDoc.mime_type?.startsWith('image/') ? (
                 <img
                   src={blobUrl}
@@ -659,7 +665,9 @@ function DocumentTextCard({ doc }: { doc: any }) {
         <h3>{t('doc.textRead')}</h3>
         <div className="grow" />
         {isProcessing && (
-          <span className="poc-chip"><span className="spin" /> {t('doc.reading')}</span>
+          <span className="poc-chip" style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+            <GovernmentLogoLoader size="xs" inline /> {t('doc.reading')}
+          </span>
         )}
         {!isProcessing && !failed && doc.ocr_confidence != null && (
           <span className={`poc-chip ${lowConfidence ? 'warn' : 'ok'}`}>
@@ -782,18 +790,11 @@ function PetitionerCard({ petition: p, extracted }: { petition: any; extracted: 
         <dt>{label}</dt>
         <dd className={mono ? 'mono' : undefined}>
           {displayVal || <span className="muted">{t('common.none')}</span>}
-          {useExtracted && (
-            <span
-              className="poc-chip"
-              style={{ marginLeft: 6, fontSize: 10 }}
-              title={e.evidence ? `“${e.evidence}”` : undefined}
-            >
-              {t('pet.fromDoc')}
-            </span>
-          )}
-          {isRenderedDifferent && rawValue && lang !== 'en' && (
+          {isRenderedDifferent && rawValue && (
+            (lang === 'en' && hasTamil(rawValue)) || (lang === 'ta' && hasLatin(rawValue) && !hasTamil(rawValue))
+          ) && (
             <div className="small muted" style={{ marginTop: 2 }}>
-              {rawValue} <span style={{ opacity: .75 }}>· {t('pet.asWritten')}</span>
+              {field === 'name' ? cleanNameString(rawValue) : rawValue} <span style={{ opacity: .75 }}>· {t('pet.asWritten')}</span>
             </div>
           )}
         </dd>
@@ -813,27 +814,7 @@ function PetitionerCard({ petition: p, extracted }: { petition: any; extracted: 
           {/* The name of the language, in the console's own language: a Tamil
               console showed "தமிழ் / Tamil", which mixes the two in one field.
               The toggle lets an officer correct a wrong auto-detection inline. */}
-          <dd style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span>{p.language === 'ta' ? t('lang.ta') : t('lang.en')}</span>
-            <button
-              id="btn-toggle-petition-language"
-              title={p.language === 'ta' ? 'Switch to English' : 'தமிழுக்கு மாற்று'}
-              style={{
-                fontSize: 11, padding: '2px 8px', borderRadius: 4,
-                background: 'var(--c-accent, #2563eb)', color: '#fff',
-                border: 'none', cursor: 'pointer', lineHeight: 1.4,
-              }}
-              onClick={async () => {
-                const next = p.language === 'ta' ? 'en' : 'ta';
-                try {
-                  await pocApi.patch(`/cp/petitions/${p.id}/language`, { language: next });
-                  load();
-                } catch (e: any) { alert(e.message); }
-              }}
-            >
-              {p.language === 'ta' ? 'English ↔' : '↔ தமிழ்'}
-            </button>
-          </dd>
+          <dd>{p.language === 'ta' ? t('lang.ta') : t('lang.en')}</dd>
           <dt>{t('pet.received')}</dt>
           <dd>{fmtTime(p.created_at, lang)}</dd>
           {extracted?.document_date && (
@@ -841,9 +822,6 @@ function PetitionerCard({ petition: p, extracted }: { petition: any; extracted: 
               <dt>{t('pet.docDate')}</dt>
               <dd className="mono">
                 {extracted.document_date.value}
-                <span className="poc-chip" style={{ marginLeft: 6, fontSize: 10 }}>
-                  {t('pet.fromDoc')}
-                </span>
               </dd>
             </>
           )}
@@ -854,12 +832,6 @@ function PetitionerCard({ petition: p, extracted }: { petition: any; extracted: 
             </>
           )}
         </dl>
-
-        {anyExtracted && (
-          <p className="small muted" style={{ marginTop: 10, marginBottom: 0 }}>
-            {t('pet.fromDocNote')}
-          </p>
-        )}
       </div>
     </div>
   );

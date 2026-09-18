@@ -68,6 +68,22 @@ export interface TranslationResult {
   note?: string;
 }
 
+export function cleanTranslatedText(text: string, target: 'ta' | 'en'): string {
+  let s = text;
+  if (target === 'en') {
+    s = s.replace(/\bSathappur\b/gi, 'Siddhapudur')
+         .replace(/\bSathapur\b/gi, 'Siddhapudur')
+         .replace(/\bChaththappoor\b/gi, 'Siddhapudur')
+         .replace(/\bChiththapputhoor\b/gi, 'Siddhapudur')
+         .replace(/\bKanthipuram\b/gi, 'Gandhipuram');
+  } else {
+    s = s.replace(/\bசத்தாப்பூர்\b/g, 'சித்தாப்புதூர்')
+         .replace(/\bஇத்தாப்பூர்\b/g, 'சித்தாப்புதூர்')
+         .replace(/\bவிறியோகப்\b/g, 'விநியோகப்');
+  }
+  return s;
+}
+
 /**
  * Render `text` in `target`, translating only when it is not already in it.
  *
@@ -90,7 +106,7 @@ export async function translateText(
   const hit = db.prepare(
     'SELECT translated FROM translation_cache WHERE source_hash = ? AND target_lang = ?',
   ).get(key, target) as any;
-  if (hit?.translated) return { text: hit.translated, machine: true };
+  if (hit?.translated) return { text: cleanTranslatedText(hit.translated, target), machine: true };
 
   /*
    * A DEDICATED TRANSLATION SERVICE TAKES PRECEDENCE.
@@ -103,11 +119,12 @@ export async function translateText(
   if (isTranslateApiConfigured()) {
     const api = await translateViaApi(src, target, target === 'ta' ? 'en' : 'ta');
     if (api && detectLang(api.text) === target) {
+      const cleanText = cleanTranslatedText(api.text, target);
       db.prepare(`
         INSERT OR IGNORE INTO translation_cache (source_hash, target_lang, source_text, translated)
         VALUES (?, ?, ?, ?)
-      `).run(key, target, src, api.text);
-      return { text: api.text, machine: true };
+      `).run(key, target, src, cleanText);
+      return { text: cleanText, machine: true };
     }
   }
 
@@ -167,12 +184,13 @@ export async function translateText(
       };
     }
 
+    const cleanTranslated = cleanTranslatedText(translated, target);
     db.prepare(`
       INSERT OR IGNORE INTO translation_cache (source_hash, target_lang, source_text, translated)
       VALUES (?, ?, ?, ?)
-    `).run(key, target, src, translated);
+    `).run(key, target, src, cleanTranslated);
 
-    return { text: translated, machine: true };
+    return { text: cleanTranslated, machine: true };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return { text: src, machine: false, note: `Translation unavailable (${msg.slice(0, 80)}).` };

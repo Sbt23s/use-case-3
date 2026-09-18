@@ -2,7 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { pocApi, pct } from './pocApi';
 import { useI18n } from '../lib/i18n';
 import { speak, stopSpeaking, ttsSupport, type SpeakHandle } from '../lib/tts';
+import { speechSupport, startDictation, type Dictation } from '../lib/speech';
 import { AiSettingsDialog } from './AiSettingsDialog';
+import { GovernmentLogoLoader } from './GovernmentLogoLoader';
 
 const ACCEPT = [
   'application/pdf', 'application/msword',
@@ -59,16 +61,8 @@ const STAGE_KEY: Record<string, string> = {
 function cleanAssistantText(text: string): string {
   if (!text) return '';
   let cleaned = text;
-  // Strip Markdown links e.g. [Title](https://...) -> Title
-  cleaned = cleaned.replace(/\[([^\]]+)\]\(https?:\/\/[^\)]+\)/g, '$1');
-  // Strip raw URLs
-  cleaned = cleaned.replace(/https?:\/\/\S+/gi, '');
-  // Strip "Source: ...", "Official sources: ...", "Web Sources: ...", "ஆதாரங்கள்: ..."
-  cleaned = cleaned.replace(/^(?:•\s*|-+\s*)?(?:Source|Sources|Official sources?|Web Sources?|ஆதாரம்|ஆதாரங்கள்):\s*.*$/gim, '');
-  // Strip citation reference lines like "[1] Title" or "[1] https://..."
-  cleaned = cleaned.replace(/^\[\d+\]\s*.*$/gim, '');
   // Strip trailing AI disclaimers
-  cleaned = cleaned.replace(/—\s*(?:This is an AI-generated answer|இது AI உருவாக்கிய பதில்).*$/gim, '');
+  cleaned = cleaned.replace(/—\s*(?:This is an AI-generated answer|இது AI உருவாக்கிய பதில்|Idhu AI generate panna bathil).*$/gim, '');
   // Clean up excess blank lines
   cleaned = cleaned.replace(/\n{3,}/g, '\n\n').trim();
   return cleaned;
@@ -247,34 +241,212 @@ function renderMarkdownContent(text: string): React.ReactNode[] {
 }
 
 function renderInlineText(text: string): React.ReactNode[] {
-  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  const parts = text.split(/(\*\*[^*]+\*\*|\[[^\]]+\]\(https?:\/\/[^\s)]+\))/g);
   return parts.map((part, i) => {
     if (part.startsWith('**') && part.endsWith('**')) {
       return <strong key={i}>{part.slice(2, -2)}</strong>;
+    }
+    const linkMatch = part.match(/^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)$/);
+    if (linkMatch) {
+      return (
+        <a
+          key={i}
+          href={linkMatch[2]}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="copilot-citation-link"
+          style={{
+            color: 'var(--copilot-accent, #2563eb)',
+            textDecoration: 'underline',
+            textUnderlineOffset: '3px',
+            fontWeight: 500,
+          }}
+        >
+          {linkMatch[1]} ↗
+        </a>
+      );
     }
     return <span key={i}>{part}</span>;
   });
 }
 
-function summariseDocAnalysis(r: any, lang: string, t: (k: string) => string): string {
-  const a = r?.analysis;
-  if (!a) return t('agent.errUnreadable');
-  const L = lang === 'ta' ? 'ta' : 'en';
-  const v = (b: any) => (b && typeof b === 'object' ? (b[L] || b.en) : b) || '—';
+function isTanglishText(text: string): boolean {
+  if (!text) return false;
+  if (/[\u0B80-\u0BFF]/.test(text)) return false;
+  return /\b(pathi|paththi|enna|eppadi|solla|sollu|irukku|iruku|illai|venum|kudunga|pannunga|panna|yaar|yaaru|enge|enga|epadi|edhuku|aagum|mudiyuma|kooduma|thonga|thanga|kodunga|vendum|theriyuma|kettu|kekura|romba|konjam|ippo|eppo|inga|anga|unakku|enakku|ungala|ungalaala|theriyum|panrathu|pannanum|maari|marri)\b/i.test(text);
+}
 
-  const lines = [
-    `### ${lang === 'ta' ? 'ஆவண ஆய்வு முடிவு' : 'Document Analysis Report'}`,
-    '',
-    v(a.summary),
-    '',
-    `• **${t('ai.act')}:** ${a.act?.id ? v(a.act.short_name) : t('agent.notIdentified')}`,
-    `• **${t('agent.section')}:** ${a.act?.section_no ?? t('agent.needsVerification')}`,
-    `• **${t('ai.department')}:** ${a.department?.id ? v(a.department.name) : t('agent.deptUnknown')}`,
-    `• **${t('ai.authority')}:** ${a.authority?.id ? v(a.authority.designation) : t('agent.notIdentified')}`,
-    `• **${t('ai.priority')}:** ${a.priority ?? '—'}`,
-    '',
-    `**${t('agent.secAction')}:** ${v(a.next_action)}`,
-  ];
+function summariseDocAnalysis(r: any, lang: string, t: (k: string) => string): string {
+  const a = r?.analysis || r;
+  if (!a || (!a.summary && !a.main_issue)) return t('agent.errUnreadable');
+
+  const isTa = lang === 'ta';
+  const isTanglish = lang === 'tanglish';
+
+  const v = (b: any) => {
+    if (!b) return '—';
+    if (typeof b === 'object') {
+      return (isTa ? (b.ta || b.en) : (b.en || b.ta)) || '—';
+    }
+    return String(b);
+  };
+
+  const lines: string[] = [];
+
+  // Header Title
+  if (isTa) {
+    lines.push('### 📋 ஆவண ஆய்வு & சட்ட நிர்வாக பகுப்பாய்வு அறிக்கை');
+  } else if (isTanglish) {
+    lines.push('### 📋 Document AI Analysis Mudivu (Statutory & Departmental Report)');
+  } else {
+    lines.push('### 📋 Document AI Statutory & Administrative Analysis Report');
+  }
+  lines.push('');
+
+  // Overview / Summary
+  if (a.summary) {
+    lines.push(v(a.summary));
+    lines.push('');
+  }
+
+  // Grievance Details & Petitioner Particulars
+  const doc = r?.document;
+  const ext = doc?.extracted_details;
+  const petitionerName = ext?.name || (a.entities?.people && a.entities.people.length > 0 ? a.entities.people[0] : null);
+  const petitionerPhone = ext?.phone || null;
+  const petitionerPlace = ext?.district || ext?.taluk || (a.entities?.places && a.entities.places.length > 0 ? a.entities.places[0] : null);
+  const docDate = ext?.date || (a.entities?.dates && a.entities.dates.length > 0 ? a.entities.dates[0] : null);
+
+  if (petitionerName || petitionerPhone || petitionerPlace || docDate) {
+    if (isTa) {
+      lines.push('**மனுதாரர் & ஆவண விவரங்கள்:**');
+      if (petitionerName) lines.push(`• **பெயர்:** ${petitionerName}`);
+      if (petitionerPhone) lines.push(`• **தொடர்பு எண்:** ${petitionerPhone}`);
+      if (petitionerPlace) lines.push(`• **மாவட்டம் / இடம்:** ${petitionerPlace}`);
+      if (docDate) lines.push(`• **ஆவண தேதி:** ${docDate}`);
+    } else if (isTanglish) {
+      lines.push('**Petitioner & Aavana Vivaram:**');
+      if (petitionerName) lines.push(`• **Petitioner Peyar:** ${petitionerName}`);
+      if (petitionerPhone) lines.push(`• **Phone Number:** ${petitionerPhone}`);
+      if (petitionerPlace) lines.push(`• **District / Idam:** ${petitionerPlace}`);
+      if (docDate) lines.push(`• **Aavana Thethi (Date):** ${docDate}`);
+    } else {
+      lines.push('**Petitioner & Document Particulars:**');
+      if (petitionerName) lines.push(`• **Petitioner Name:** ${petitionerName}`);
+      if (petitionerPhone) lines.push(`• **Contact No:** ${petitionerPhone}`);
+      if (petitionerPlace) lines.push(`• **Location / District:** ${petitionerPlace}`);
+      if (docDate) lines.push(`• **Document Date:** ${docDate}`);
+    }
+    lines.push('');
+  }
+
+  // Core Grievance Issue & Request
+  if (a.main_issue || a.petitioner_request) {
+    if (isTa) {
+      lines.push('**பிரச்சனை & கோரிக்கை சுருக்கம்:**');
+      if (a.main_issue) lines.push(`• **முக்கிய பிரச்சனை:** ${v(a.main_issue)}`);
+      if (a.petitioner_request) lines.push(`• **மனுதாரர் கோரிக்கை:** ${v(a.petitioner_request)}`);
+    } else if (isTanglish) {
+      lines.push('**Mukkiya Issue & Kuraidheerppu Koorikkai:**');
+      if (a.main_issue) lines.push(`• **Mukkiya Issue:** ${v(a.main_issue)}`);
+      if (a.petitioner_request) lines.push(`• **Petitioner-oda Request:** ${v(a.petitioner_request)}`);
+    } else {
+      lines.push('**Core Issue & Relief Requested:**');
+      if (a.main_issue) lines.push(`• **Main Grievance:** ${v(a.main_issue)}`);
+      if (a.petitioner_request) lines.push(`• **Petitioner's Prayer:** ${v(a.petitioner_request)}`);
+    }
+    lines.push('');
+  }
+
+  // Applicable Statutory Provisions (Act & Section)
+  if (isTa) {
+    lines.push('**பொருந்தக்கூடிய சட்டம் & சட்டப்பிரிவு (Applicable Statutory Framework):**');
+  } else if (isTanglish) {
+    lines.push('**Porundhum Sattam & Pirivu (Applicable Act & Section):**');
+  } else {
+    lines.push('**Applicable Statutory Framework (Act & Section):**');
+  }
+
+  const actName = a.act?.id ? v(a.act.short_name) : (isTa ? 'அடையாளம் காணப்படவில்லை' : isTanglish ? 'Act kandupidikkapadavillai' : 'Not identified');
+  const actYear = a.act?.year ? ` (${a.act.year})` : '';
+  const sectionInfo = a.act?.section_no ? `${a.act.section_no}${a.act.section_heading ? ` – ${v(a.act.section_heading)}` : ''}` : (isTa ? 'சரிபார்ப்பு தேவை' : isTanglish ? 'Verification thevai' : 'Needs Verification');
+
+  lines.push(`• **${isTa ? 'சட்டம்' : isTanglish ? 'Sattam (Act)' : 'Act'}:** ${actName}${actYear}`);
+  lines.push(`• **${isTa ? 'பிரிவு' : isTanglish ? 'Pirivu (Section)' : 'Section'}:** ${sectionInfo}`);
+
+  if (a.act?.reason) {
+    const actReasonLabel = isTa ? 'சட்ட ரீதியான காரணம்' : isTanglish ? 'Satta Kaaranam (Act Rationale)' : 'Statutory Rationale';
+    lines.push(`• **${actReasonLabel}:** ${v(a.act.reason)}`);
+  }
+  lines.push('');
+
+  // Competent Department & Authority
+  if (isTa) {
+    lines.push('**தொடர்புடைய அரசுத்துறை & அதிகார வரம்பு (Department & Authority):**');
+  } else if (isTanglish) {
+    lines.push('**Poruppaana Thurai & Adhigaari (Competent Department & Authority):**');
+  } else {
+    lines.push('**Competent Administrative Department & Authority:**');
+  }
+
+  const deptName = a.department?.id ? v(a.department.name) : (isTa ? 'அடையாளம் காணப்படவில்லை' : isTanglish ? 'Thurai theriyavillai' : 'Unknown');
+  const deptCode = a.department?.code ? ` [${a.department.code}]` : '';
+  const authName = a.authority?.id ? `${v(a.authority.designation)}${a.authority.office_name ? ` (${v(a.authority.office_name)})` : ''}` : (isTa ? 'அடையாளம் காணப்படவில்லை' : isTanglish ? 'Kandupidikkapadavillai' : 'Not identified');
+
+  lines.push(`• **${isTa ? 'அரசுத்துறை' : isTanglish ? 'Arasu Thurai (Department)' : 'Department'}:** ${deptName}${deptCode}`);
+  lines.push(`• **${isTa ? 'தகுதிவாய்ந்த அதிகாரி' : isTanglish ? 'Adhigaari (Authority)' : 'Competent Authority'}:** ${authName}`);
+
+  if (a.department?.reason) {
+    const deptReasonLabel = isTa ? 'துறை அதிகார எல்லை விளக்கம்' : isTanglish ? 'Thurai Kaaranam (Department Rationale)' : 'Departmental Rationale';
+    lines.push(`• **${deptReasonLabel}:** ${v(a.department.reason)}`);
+  }
+  lines.push('');
+
+  // Required Documents
+  if (Array.isArray(a.required_documents) && a.required_documents.length > 0) {
+    if (isTa) {
+      lines.push('**தேவைப்படும் ஆதார ஆவணங்கள் (Required Documents):**');
+    } else if (isTanglish) {
+      lines.push('**Thevaipadum Aavanangal (Mandatory Required Documents):**');
+    } else {
+      lines.push('**Mandatory Required Documents:**');
+    }
+    for (const docItem of a.required_documents) {
+      lines.push(`• ${v(docItem)}`);
+    }
+    lines.push('');
+  }
+
+  // Redressal Workflow
+  if (Array.isArray(a.workflow) && a.workflow.length > 0) {
+    if (isTa) {
+      lines.push('**சட்டரீதியான தீர்வு நடைமுறை (Statutory Redressal Workflow):**');
+    } else if (isTanglish) {
+      lines.push('**Sattareedhiyaana Nadavadikkai Varisai (Workflow Steps):**');
+    } else {
+      lines.push('**Statutory Redressal Workflow:**');
+    }
+    a.workflow.forEach((wf: any, idx: number) => {
+      lines.push(`${idx + 1}. ${v(wf)}`);
+    });
+    lines.push('');
+  }
+
+  // Priority & Action
+  if (isTa) {
+    lines.push('**முன்னுரிமை & உடனடி நடவடிக்கை:**');
+    lines.push(`• **முன்னுரிமை நிலை:** ${a.priority || 'NORMAL'}${a.priority_reason ? ` (${v(a.priority_reason)})` : ''}`);
+    lines.push(`• **அடுத்த கட்ட நடவடிக்கை:** ${v(a.next_action)}`);
+  } else if (isTanglish) {
+    lines.push('**Priority & Udanadi Nadavadikkai (Action Required):**');
+    lines.push(`• **Priority Nilai:** ${a.priority || 'NORMAL'}${a.priority_reason ? ` (${v(a.priority_reason)})` : ''}`);
+    lines.push(`• **Adutha Kattam (Immediate Action):** ${v(a.next_action)}`);
+  } else {
+    lines.push('**Priority & Immediate Action:**');
+    lines.push(`• **Priority Level:** ${a.priority || 'NORMAL'}${a.priority_reason ? ` (${v(a.priority_reason)})` : ''}`);
+    lines.push(`• **Immediate Officer Action:** ${v(a.next_action)}`);
+  }
+
   return lines.join('\n');
 }
 
@@ -287,7 +459,7 @@ export function CopilotAgentView({
   onClose: () => void;
   petitionId?: number | null;
 }) {
-  const { t, lang } = useI18n();
+  const { t, lang, setLang } = useI18n();
 
   const STORAGE_KEY = 'egov_copilot_conversations_v4';
 
@@ -348,6 +520,64 @@ export function CopilotAgentView({
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     return (localStorage.getItem('egov_copilot_theme') as 'light' | 'dark') || 'light';
   });
+
+  const [copilotLang, setCopilotLang] = useState<'ta' | 'en'>(() => {
+    const saved = localStorage.getItem('egov_copilot_lang');
+    if (saved === 'ta' || saved === 'en') return saved;
+    return lang === 'ta' ? 'ta' : 'en';
+  });
+
+  const handleLangChange = (l: 'en' | 'ta') => {
+    setCopilotLang(l);
+    setLang(l);
+    try {
+      localStorage.setItem('egov_copilot_lang', l);
+    } catch { /* quota */ }
+  };
+
+  const [isListening, setIsListening] = useState(false);
+  const dictationRef = useRef<Dictation | null>(null);
+
+  const toggleListening = () => {
+    if (isListening) {
+      dictationRef.current?.stop();
+      dictationRef.current = null;
+      setIsListening(false);
+      return;
+    }
+    const sup = speechSupport();
+    if (!sup.supported) {
+      alert(sup.reason || 'Speech recognition is not supported in this browser.');
+      return;
+    }
+
+    const recLang = copilotLang === 'ta' ? 'ta-IN' : 'en-IN';
+
+    setIsListening(true);
+    dictationRef.current = startDictation(recLang, {
+      onFinal: (text) => {
+        setInput((prev) => (prev ? `${prev} ${text}` : text));
+        taRef.current?.focus();
+      },
+      onInterim: (_text) => {},
+      onError: (err) => {
+        console.warn('Speech recognition error:', err);
+        setIsListening(false);
+        dictationRef.current = null;
+      },
+      onEnd: () => {
+        setIsListening(false);
+        dictationRef.current = null;
+      },
+    });
+  };
+
+  useEffect(() => {
+    return () => {
+      dictationRef.current?.stop();
+      dictationRef.current = null;
+    };
+  }, []);
 
   const toggleTheme = () => {
     setTheme((prev) => {
@@ -420,10 +650,13 @@ export function CopilotAgentView({
   }, []);
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth' });
+    endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }, [messages.length, stage]);
 
-  useEffect(() => () => { stopSpeaking(); }, []);
+  useEffect(() => () => {
+    stopSpeaking();
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, []);
 
   // Keyboard shortcut Esc to return to petitions
   useEffect(() => {
@@ -458,15 +691,16 @@ export function CopilotAgentView({
         const r = await loadResult(docId);
         setBusy(false);
         setStage(null);
+        const effectiveDocLang = copilotLang;
         push({
           role: 'ASSISTANT',
-          content: summariseDocAnalysis(r, lang, t),
+          content: summariseDocAnalysis(r, effectiveDocLang, t),
           confidence: r?.analysis?.overall_confidence,
           analysis: r,
         });
       })();
     }
-  }, [feed, docId, busy, loadResult, lang, t]);
+  }, [feed, docId, busy, loadResult, lang, t, copilotLang, input]);
 
   const pickFile = (f: File | null) => {
     if (!f) return;
@@ -565,14 +799,21 @@ export function CopilotAgentView({
     }
 
     if (!question) return;
+    if (isListening) {
+      dictationRef.current?.stop();
+      dictationRef.current = null;
+      setIsListening(false);
+    }
     push({ role: 'USER', content: question });
     setInput('');
     setBusy(true);
 
     try {
+      const chatLang = copilotLang;
+
       const r = await pocApi.post<any>('/cp/e-gov-chat', {
         question,
-        lang,
+        lang: chatLang,
         conversationId: activeConv.id,
         ...(docId ? { petitionId: docId } : {}),
       });
@@ -713,6 +954,28 @@ export function CopilotAgentView({
         </div>
 
         <div className="copilot-agent-header-right">
+          {/* Tamil / English Toggle in Marked Area */}
+          <div className="copilot-lang-toggle" role="group" aria-label="Language Toggle">
+            <button
+              type="button"
+              className={`copilot-lang-toggle-btn ${copilotLang === 'en' ? 'active' : ''}`}
+              onClick={() => handleLangChange('en')}
+              aria-pressed={copilotLang === 'en'}
+              title="Switch to English"
+            >
+              English
+            </button>
+            <button
+              type="button"
+              className={`copilot-lang-toggle-btn ${copilotLang === 'ta' ? 'active' : ''}`}
+              onClick={() => handleLangChange('ta')}
+              aria-pressed={copilotLang === 'ta'}
+              title="தமிழுக்கு மாறுக"
+            >
+              தமிழ்
+            </button>
+          </div>
+
           <button
             type="button"
             className="copilot-theme-btn"
@@ -731,14 +994,6 @@ export function CopilotAgentView({
               + {lang === 'ta' ? 'புதிய உரையாடல்' : 'New Chat'}
             </button>
           )}
-          <button
-            type="button"
-            className="copilot-dark-action-btn"
-            onClick={() => setShowSettings(true)}
-            title={t('aim.settings')}
-          >
-            ⚙
-          </button>
           <button
             type="button"
             className="copilot-dark-action-btn close"
@@ -848,9 +1103,11 @@ export function CopilotAgentView({
           <div className="copilot-agent-scroll-area">
         <div className="copilot-agent-centered-column">
           {!loaded && (
-            <div className="copilot-loading-screen">
-              <span className="spin" />
-              <p>{lang === 'ta' ? 'உரையாடல் ஏற்றப்படுகிறது...' : 'Initializing Universal AI Agent...'}</p>
+            <div className="copilot-loading-screen" style={{ minHeight: '40vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <GovernmentLogoLoader
+                size="md"
+                label={lang === 'ta' ? 'உரையாடல் ஏற்றப்படுகிறது...' : 'Initializing Universal AI Agent...'}
+              />
             </div>
           )}
 
@@ -927,13 +1184,21 @@ export function CopilotAgentView({
                 {/* Main Message Content */}
                 <div className="copilot-message-text">
                   {m.role === 'ASSISTANT' && !m.error
-                    ? renderMarkdownContent(m.analysis ? summariseDocAnalysis(m.analysis, lang, t) : cleanAssistantText(m.content))
+                    ? renderMarkdownContent(
+                        m.analysis
+                          ? summariseDocAnalysis(
+                              m.analysis,
+                              copilotLang,
+                              t,
+                            )
+                          : cleanAssistantText(m.content),
+                      )
                     : m.content.split('\n').map((line, i) =>
                         line.trim() ? <p key={i}>{line}</p> : <div key={i} className="agent-spacer" />
                       )}
                 </div>
 
-                {/* Grounding Source Chips - only shown when inspecting an analyzed document / petition */}
+                {/* Grounding Source Chips - shown when inspecting an analyzed document / petition */}
                 {m.role === 'ASSISTANT' && !m.error && m.analysis && m.sources && m.sources.filter((s: any) => s.type !== 'WEB').length > 0 && (
                   <div className="copilot-sources-strip">
                     <span className="copilot-sources-heading">
@@ -950,6 +1215,28 @@ export function CopilotAgentView({
                           {sourceIcon(src.type)} {src.label}
                         </span>
                       ))}
+                  </div>
+                )}
+
+                {/* Grounding Web Source Badges from Real-Time Search */}
+                {m.role === 'ASSISTANT' && !m.error && m.webSources && m.webSources.length > 0 && (
+                  <div className="copilot-sources-strip" style={{ marginTop: '0.4rem' }}>
+                    <span className="copilot-sources-heading">
+                      {lang === 'ta' ? '🌐 சரிபார்க்கப்பட்ட இணையதளங்கள்:' : '🌐 Verified Sources:'}
+                    </span>
+                    {m.webSources.slice(0, 4).map((src: any, i: number) => (
+                      <a
+                        key={i}
+                        href={src.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="copilot-src-pill src-web"
+                        title={`${src.title}\n${src.url}`}
+                        style={{ textDecoration: 'none', cursor: 'pointer' }}
+                      >
+                        🌐 {src.source || 'Official Source'} ↗
+                      </a>
+                    ))}
                   </div>
                 )}
 
@@ -992,21 +1279,15 @@ export function CopilotAgentView({
             </div>
           ))}
 
-          {/* Thinking Indicator */}
+          {/* Thinking / Real-Time Search / OCR Processing Indicator */}
           {busy && (
             <div className="copilot-chat-row agent-row">
-              <div className="copilot-message-avatar thinking-pulse">
-                <span>🤖</span>
-              </div>
-              <div className="copilot-bubble agent-bubble thinking-bubble">
-                <div className="copilot-thinking-dots">
-                  <span />
-                  <span />
-                  <span />
-                </div>
-                <span className="copilot-thinking-label">
-                  {stage ? t(STAGE_KEY[stage] ?? 'agent.stageUpload') : (lang === 'ta' ? 'மின்-ஆளுமை துணை சிந்திக்கிறது...' : 'E-Gov Copilot is thinking...')}
-                </span>
+              <div className="copilot-bubble agent-bubble thinking-bubble" style={{ padding: '0.65rem 1.15rem' }}>
+                <GovernmentLogoLoader
+                  size="xs"
+                  inline
+                  label={stage ? t(STAGE_KEY[stage] ?? 'agent.stageUpload') : (lang === 'ta' ? 'மின்-ஆளுமை துணை சிந்திக்கிறது & ஆதாரங்களைச் சரிபார்க்கிறது...' : 'E-Gov Copilot is analyzing & cross-verifying verified sources...')}
+                />
               </div>
             </div>
           )}
@@ -1084,6 +1365,23 @@ export function CopilotAgentView({
               }}
               onKeyDown={onKeyDown}
             />
+
+            {/* Voice Dictation (Microphone) Button */}
+            {speechSupport().supported && (
+              <button
+                type="button"
+                className={`copilot-mic-btn ${isListening ? 'listening' : ''}`}
+                onClick={toggleListening}
+                disabled={busy}
+                title={
+                  isListening
+                    ? (lang === 'ta' ? 'கேட்பதை நிறுத்துக' : 'Listening... click to stop')
+                    : (lang === 'ta' ? 'குரல் உள்ளீடு (தமிழ் / ஆங்கிலம் / Tanglish பேசலாம்)' : 'Voice input (Speak in Tamil, English, or Tanglish)')
+                }
+              >
+                {isListening ? '🎙️…' : '🎙️'}
+              </button>
+            )}
 
             {/* Send Button */}
             <button

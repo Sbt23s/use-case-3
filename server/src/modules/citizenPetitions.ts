@@ -1987,7 +1987,7 @@ cpRouter.post('/e-gov-chat', requirePermission('AI_ANALYZE'), async (req, res) =
   const S = z.object({
     question: z.string().min(2).max(500),
     petitionId: z.number().int().positive().optional(),
-    lang: z.enum(['ta', 'en']).optional(),
+    lang: z.enum(['ta', 'en', 'tanglish']).optional(),
     conversationId: z.string().max(64).optional(),
   });
   const parsed = S.safeParse(req.body);

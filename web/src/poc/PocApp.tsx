@@ -10,6 +10,7 @@ import { CopilotAgentView } from './CopilotAgentView';
 import { AiSettingsDialog } from './AiSettingsDialog';
 import { useI18n, LanguageToggle } from '../lib/i18n';
 import { displayName } from '../lib/translit';
+import { GovernmentLogoLoader } from './GovernmentLogoLoader';
 
 /**
  * Grievance Management POC — Officer Console.
@@ -29,8 +30,14 @@ export function PocApp() {
   const [feed, setFeed] = useState<any[]>([]);
   const [searchQ, setSearchQ] = useState('');
   const [activeSearch, setActiveSearch] = useState('');
+  const [dashboardKey, setDashboardKey] = useState(0);
   const esRef = useRef<EventSource | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Always reset scroll to top on navigation/view transitions
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, [copilot, openId, dashboardKey]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -116,7 +123,9 @@ export function PocApp() {
     // The footer belongs on every screen, including this one.
     return (
       <div className="poc">
-        <main className="poc-main"><div className="empty"><span className="spin" /></div></main>
+        <main className="poc-main" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
+          <GovernmentLogoLoader size="lg" label={t('common.loading')} />
+        </main>
         <AppFooter />
       </div>
     );
@@ -138,90 +147,91 @@ export function PocApp() {
         }
       }} />
     );
-  }
+  }  return (
+    <div className={`poc${copilot ? ' poc-has-copilot' : ''}`}>
+      <div className="poc-top-bar">
+        <header className="poc-header">
+          <div className="mark">⚖</div>
+          <div>
+            <div className="title">{t('app.title')}</div>
+            <div className="sub">{t('app.subtitle')}</div>
+          </div>
+          <div className="grow" />
+          {/* Language toggle: switches the whole console in place, no reload. */}
+          <LanguageToggle />
+          <div className="who">
+            <b>{displayName(user.fullName.replace(/,\s*(Grievance Officer|குறைதீர்ப்பு அலுவலர்)/i, '').trim(), lang)}</b>
+            {t('app.role')}
+          </div>
+          <button onClick={logout}>{t('common.signOut')}</button>
+        </header>
 
-  return (
-    <div className="poc">
-      <header className="poc-header">
-        <div className="mark">⚖</div>
-        <div>
-          <div className="title">{t('app.title')}</div>
-          <div className="sub">{t('app.subtitle')}</div>
-        </div>
-        <div className="grow" />
-        {/* Language toggle: switches the whole console in place, no reload. */}
-        <LanguageToggle />
-        <div className="who">
-          <b>{displayName(user.fullName.replace(/,\s*(Grievance Officer|குறைதீர்ப்பு அலுவலர்)/i, '').trim(), lang)}</b>
-          {t('app.role')}
-        </div>
-        <button onClick={logout}>{t('common.signOut')}</button>
-      </header>
-
-      <nav className="poc-nav">
-        <div className="poc-nav-left">
-          <button
-            className={openId === null && !copilot ? 'on' : ''}
-            onClick={() => {
-              setCopilot(false);
-              setOpenId(null);
-            }}
-          >
-            {t('nav.petitions')}
-          </button>
-          <button
-            className={`nav-copilot-btn ${copilot ? 'on' : ''}`}
-            onClick={() => setCopilot((v) => !v)}
-            aria-expanded={copilot}
-          >
-            🤖 {t('nav.copilot')}
-          </button>
-        </div>
-
-        {/* Global Search Box in Grey Navbar - Shown ONLY on Dashboard */}
-        {openId === null && !copilot && (
-          <form className="nav-search-form" onSubmit={handleNavSearch} role="search">
-            <div className="nav-search-box">
-              <input
-                ref={searchInputRef}
-                type="text"
-                className="nav-search-input"
-                value={searchQ}
-                onChange={(e) => {
-                  setSearchQ(e.target.value);
-                  if (e.target.value === '') {
-                    setActiveSearch('');
-                  }
-                }}
-                placeholder={t('dash.searchPlaceholder') || 'Reference number, subject or citizen name...'}
-                aria-label={t('common.search')}
-              />
-              {searchQ ? (
-                <button
-                  type="button"
-                  className="nav-search-clear"
-                  onClick={handleClearSearch}
-                  title="Clear search"
-                  aria-label="Clear search"
-                >
-                  <svg viewBox="0 0 14 14" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                    <path d="M3 3l8 8M11 3l-8 8" />
-                  </svg>
-                </button>
-              ) : (
-                <kbd className="nav-search-kbd">Ctrl K</kbd>
-              )}
-            </div>
-            <button type="submit" className="nav-search-btn" id="btn-nav-search">
-              <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <circle cx="8.5" cy="8.5" r="5.5" />
-                <path d="M12.5 12.5L17 17" />
-              </svg>
-              <span>{t('common.search')}</span>
+        <nav className="poc-nav">
+          <div className="poc-nav-left">
+            <button
+              className={openId === null && !copilot ? 'on' : ''}
+              onClick={() => {
+                setCopilot(false);
+                setOpenId(null);
+                setDashboardKey((k) => k + 1);
+              }}
+            >
+              {t('nav.petitions')}
             </button>
-          </form>
-        )}
-      </nav>
+            <button
+              className={`nav-copilot-btn ${copilot ? 'on' : ''}`}
+              onClick={() => setCopilot((v) => !v)}
+              aria-expanded={copilot}
+            >
+              🤖 {t('nav.copilot')}
+            </button>
+          </div>
+
+          {/* Global Search Box in Grey Navbar - Shown ONLY on Dashboard */}
+          {openId === null && !copilot && (
+            <form className="nav-search-form" onSubmit={handleNavSearch} role="search">
+              <div className="nav-search-box">
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  className="nav-search-input"
+                  value={searchQ}
+                  onChange={(e) => {
+                    setSearchQ(e.target.value);
+                    if (e.target.value === '') {
+                      setActiveSearch('');
+                    }
+                  }}
+                  placeholder={t('dash.searchPlaceholder') || 'Reference number, subject or citizen name...'}
+                  aria-label={t('common.search')}
+                />
+                {searchQ ? (
+                  <button
+                    type="button"
+                    className="nav-search-clear"
+                    onClick={handleClearSearch}
+                    title="Clear search"
+                    aria-label="Clear search"
+                  >
+                    <svg viewBox="0 0 14 14" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                      <path d="M3 3l8 8M11 3l-8 8" />
+                    </svg>
+                  </button>
+                ) : (
+                  <kbd className="nav-search-kbd">Ctrl K</kbd>
+                )}
+              </div>
+              <button type="submit" className="nav-search-btn" id="btn-nav-search">
+                <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <circle cx="8.5" cy="8.5" r="5.5" />
+                  <path d="M12.5 12.5L17 17" />
+                </svg>
+                <span>{t('common.search')}</span>
+              </button>
+            </form>
+          )}
+        </nav>
+      </div>
 
       <main className={`poc-main${copilot ? ' poc-main-copilot' : ''}`}>
         {copilot ? (
@@ -231,7 +241,14 @@ export function PocApp() {
             onClose={() => setCopilot(false)}
           />
         ) : openId === null ? (
-          <OfficerDashboard feed={feed} live={live} onOpen={setOpenId} searchQ={activeSearch} onClearSearch={handleClearSearch} />
+          <OfficerDashboard
+            key={dashboardKey}
+            feed={feed}
+            live={live}
+            onOpen={setOpenId}
+            searchQ={activeSearch}
+            onClearSearch={handleClearSearch}
+          />
         ) : (
           <PetitionDetail petitionId={openId} feed={feed} onBack={() => setOpenId(null)} />
         )}

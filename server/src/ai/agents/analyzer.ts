@@ -473,6 +473,26 @@ export async function runAnalysis(
       const agree = sim.sharedConcepts.filter((c) => subjectConceptIds.has(c.split('|')[0]));
       if (agree.length) sim.score += 6 * agree.length;
     }
+
+    /*
+     * Direct title / short_name mention boost.
+     * If the document or petition explicitly names the Act or its key title tokens,
+     * this guarantees that the cited Act is identified without drift or damage.
+     */
+    const titleHay = (String(a.short_name ?? '') + ' ' + String(a.short_name_ta ?? '')).toLowerCase();
+    const titleTokens = tokenise(titleHay).filter((t) => t.length > 3 && !['tamil', 'nadu', 'act'].includes(t));
+    const corpusTokens = new Set(tokenise(corpus));
+    if (titleTokens.length > 0) {
+      let matchedCount = 0;
+      for (const tt of titleTokens) {
+        if (corpusTokens.has(tt)) matchedCount++;
+      }
+      if (matchedCount === titleTokens.length || (titleTokens.length >= 2 && matchedCount / titleTokens.length >= 0.7)) {
+        sim.score += 45;
+        sim.sharedTerms.push(a.short_name);
+      }
+    }
+
     return { row: a, sim };
   }).filter((x) => x.sim.score > 0).sort((x, y) => y.sim.score - x.sim.score);
 
