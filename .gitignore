@@ -13,4 +13,23 @@ build/
 
 server/data/
 server/api.log
+web/web.log
 *.log
+
+# Stray shell output files (accidental console.log filenames from PowerShell)
+console.log(*
+server/console.log(*
+server/{const
+
+# Tesseract OCR trained data models
+*.traineddata
+
+# SQLite databases
+*.db
+*.db-shm
+*.db-wal
+
+# Misc
+powershell.cmd
+*.tsbuildinfo
+tamil-test.png
