@@ -5,6 +5,12 @@ import type { CopilotAnswer } from './copilot.js';
 import { searchOfficialSources, isGovQuery, type SearchResult } from '../../core/search.js';
 import { translateText } from '../../core/translate.js';
 import { isLiveProvider } from '../gateway.js';
+import {
+  isCoimbatoreQuery,
+  getCoimbatoreGroundedContext,
+  formulateCoimbatoreSearch,
+  requiresOfficialVerification,
+} from '../knowledge/coimbatoreKnowledge.js';
 
 /**
  * e-Gov Copilot — Hermes-pattern ReAct agent.
@@ -386,6 +392,11 @@ function classifyWebSearchNeed(intent: Intent, q: string): { needsSearch: boolea
     return { needsSearch: false, reason: 'internal_stats' };
   }
 
+  // 4. Dedicated Coimbatore real-time knowledge queries
+  if (isCoimbatoreQuery(q)) {
+    return { needsSearch: true, reason: 'coimbatore_realtime_search' };
+  }
+
   // For all other questions ("ent questions kettalum"):
   // Perform FULL DEEP real-time search, read the pages, and analyze in real time!
   return { needsSearch: true, reason: 'full_deep_search' };
@@ -754,19 +765,16 @@ function buildSystemPrompt(lang: CopilotLang, mixed: boolean): string {
     '  - Tamil: "⚠️ குறிப்பு: இத்தகவலை அதிகாரப்பூர்வ அல்லது நம்பகமான ஆதாரங்களிலிருந்து உறுதிப்படுத்த முடியவில்லை."',
     '  - Tanglish: "⚠️ Note: Indha information-a reliable official sources moolama verify panna mudiyala."',
     '',
-    'MANDATORY CITATIONS SECTION (AT THE END OF EVERY ANSWER GROUNDED IN SOURCES):',
-    '• If real-time web sources or knowledge base records are used, conclude your answer with a clean, dedicated section:',
-    '  - In English:',
-    '    ### 📚 Verified Sources & Citations:',
-    '    • [Source Title](https://example.tn.gov.in) - Key verified information',
-    '  - In Tamil:',
-    '    ### 📚 சரிபார்க்கப்பட்ட ஆதாரங்கள்:',
-    '    • [ஆதாரத் தலைப்பு](https://example.tn.gov.in) - சரிபார்க்கப்பட்ட தகவல்',
-    '  - In Tanglish:',
-    '    ### 📚 Verified Sources (Aadhaarangal):',
-    '    • [Source Title](https://example.tn.gov.in) - Verified summary',
-    '• Always provide the clickable Markdown link [Title](URL) whenever a source URL is available.',
-    '• When confidence is low, say so explicitly in the explanation.',
+    'COIMBATORE & DISTRICT ADMINISTRATION CAPABILITIES:',
+    '• You have comprehensive, real-time knowledge of Coimbatore District Administration, Collectorate, 11 Taluks, Coimbatore City Municipal Corporation (CCMC), 5 zones, 100 wards, City Police Commissionerate, District Rural Police, CMCH & hospitals, transport, economy, history, tourism, weather, and public grievance mechanisms.',
+    '• For current officer names, postings, phone numbers, addresses, and government information, ALWAYS verify using the live web search results before answering. Never guess or hallucinate current officials or contact details.',
+    '• If a current official or contact detail is not confirmed by the verified sources, state clearly that it could not be confirmed from official records rather than guessing.',
+    '',
+    'SILENT BACKEND SEARCH & PRESENTATION (STRICT REQUIREMENT):',
+    '• All web search and fact verification is conducted silently in the backend.',
+    '• Do NOT output raw URLs, website links, or search-result source cards in your answer.',
+    '• Do NOT add a citations section or Markdown links (e.g. do not output [Title](https://...) or raw URLs).',
+    '• Synthesize verified facts directly into clean, authoritative, well-structured prose, bullet points, and tables.',
   );
 
   return lines.join('\n');
@@ -800,6 +808,10 @@ function formulateSearchQuery(q: string, history?: CopilotTurn[]): string {
     if (ctx && !lower.includes(ctx.toLowerCase())) {
       cleaned = `${ctx} ${cleaned}`;
     }
+  }
+
+  if (isCoimbatoreQuery(cleaned)) {
+    return formulateCoimbatoreSearch(cleaned);
   }
 
   const updatedLower = cleaned.toLowerCase();
@@ -882,6 +894,12 @@ function cleanAnswerText(text: string): string {
   let cleaned = text;
   // Strip trailing AI disclaimers
   cleaned = cleaned.replace(/—\s*(?:This is an AI-generated answer|இது AI உருவாக்கிய பதில்|Idhu AI generate panna bathil).*$/gim, '');
+  // Strip any source citation blocks (e.g. ### 📚 Verified Sources... or ### 📚 சரிபார்க்கப்பட்ட ஆதாரங்கள்...)
+  cleaned = cleaned.replace(/###\s*📚\s*(?:Verified Sources|சரிபார்க்கப்பட்ட ஆதாரங்கள்|Aadhaarangal)[\s\S]*$/gi, '');
+  // Strip markdown links [Title](url) -> Title
+  cleaned = cleaned.replace(/\[([^\]]+)\]\(https?:\/\/[^\)]+\)/g, '$1');
+  // Strip raw URLs
+  cleaned = cleaned.replace(/https?:\/\/\S+/gi, '');
   // Clean up excess blank lines
   cleaned = cleaned.replace(/\n{3,}/g, '\n\n').trim();
   return cleaned;
@@ -889,8 +907,8 @@ function cleanAnswerText(text: string): string {
 
 function formatSources(results: SearchResult[]): string {
   if (!results.length) return '';
-  return results.map((r, i) =>
-    `[Source ${i + 1}: ${r.source}]\nTitle: ${r.title}\nURL: ${r.url}\n${r.content ? `Verified Content:\n${r.content.slice(0, 2500)}` : `Summary: ${r.snippet}`}`,
+  return results.slice(0, 4).map((r, i) =>
+    `[Verified Source ${i + 1}: ${r.source}]\nTitle: ${r.title}\n${r.content ? `Verified Content:\n${r.content.slice(0, 700)}` : `Summary: ${r.snippet}`}`,
   ).join('\n\n');
 }
 
@@ -1019,7 +1037,7 @@ export async function runGlobalCopilot(
         answer,
         sources: cmSources,
         confidence: 1,
-        requires_verification: false,
+        requires_verification: true,
         toolsUsed,
         confidenceTier: 'HIGH',
       },
@@ -1131,7 +1149,7 @@ export async function runGlobalCopilot(
         snippet: r.snippet,
         source: r.source,
       });
-      addSource('WEB', null, `${r.source || 'Official Source'}: ${r.title.slice(0, 45)}`);
+      // Web search runs silently in backend; no WEB source cards shown to officer
     }
   }
 
@@ -1225,15 +1243,20 @@ export async function runGlobalCopilot(
     'CONFIGURED KNOWLEDGE (the ONLY Acts, departments and authorities you may name as identified):',
     knowledge.text || '(nothing in the knowledge base matched this question)',
     '',
+    isCoimbatoreQuery(question)
+      ? `TOOL: coimbatore_grounded_knowledge\n${getCoimbatoreGroundedContext(question, lang)}`
+      : '',
+    '',
     webResults.length
-      ? `TOOL: search_web_sources\nREAL-TIME WEB & PUBLIC SOURCES retrieved from live search:\n${formatSources(webResults)}`
+      ? `TOOL: search_web_sources\nREAL-TIME LIVE WEB VERIFICATION (Synthesize verified facts silently; DO NOT output URLs, links, or citation blocks):\n${formatSources(webResults)}`
       : searchNote
         ? `TOOL: search_web_sources\nLIVE WEB SEARCH: ${searchNote}`
         : '',
     '',
     history.length
       ? `CONVERSATION SO FAR (most recent last):\n${history
-        .map((h) => `${h.role === 'USER' ? 'Officer' : 'You'}: ${h.content.slice(0, 700)}`)
+        .slice(-4)
+        .map((h) => `${h.role === 'USER' ? 'Officer' : 'You'}: ${h.content.slice(0, 300)}`)
         .join('\n')}`
       : '',
     '',
@@ -1351,7 +1374,7 @@ export async function runGlobalCopilot(
     data: {
       answer,
       sources,
-      webSources,
+      webSources: [],
       confidence: finalConfidence,
       requires_verification: true,
       toolsUsed,

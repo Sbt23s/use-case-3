@@ -1,4 +1,5 @@
 import type { IAIProvider, GenerateOptions, AICompletion } from './provider.js';
+import { isCoimbatoreQuery, COIMBATORE_ADMIN_CORE } from './knowledge/coimbatoreKnowledge.js';
 
 /**
  * Deterministic local provider.
@@ -192,15 +193,9 @@ export class MockAIProvider implements IAIProvider {
 
     const webCitations = parseWebCitations();
 
-    const formatCitationsBlock = (citations: { title: string; url: string; domain: string }[]): string => {
-      if (!citations.length) return '';
-      const header = isTa
-        ? '### 📚 சரிபார்க்கப்பட்ட ஆதாரங்கள்:'
-        : isTanglish
-        ? '### 📚 Verified Sources (Aadhaarangal):'
-        : '### 📚 Verified Sources & Citations:';
-      const items = citations.map((c) => `• [${c.title}](${c.url}) - ${c.domain}`).join('\n');
-      return `\n\n${header}\n${items}`;
+    const formatCitationsBlock = (_citations: { title: string; url: string; domain: string }[]): string => {
+      // Searches run silently in the backend; do not show URLs or citation cards in UI
+      return '';
     };
 
     let inAct = false;
@@ -250,6 +245,229 @@ export class MockAIProvider implements IAIProvider {
         return '⚠️ Note: Indha information-a reliable sources moolama verify panna mudiyala.';
       } else {
         return '⚠️ Note: This information could not be verified from reliable sources.';
+      }
+    }
+
+    // Dedicated Coimbatore Administration & City Knowledge Handling
+    if (isCoimbatoreQuery(question)) {
+      if (isTa) {
+        if (/(collector|ஆட்சியர்|மாவட்ட\s*ஆட்சியர்|collectorate)/i.test(lowerQ)) {
+          return [
+            '### கோயம்புத்தூர் மாவட்ட ஆட்சியரகம் & நிர்வாக வழிகாட்டி',
+            '',
+            '• **மாவட்ட ஆட்சியர் & மாவட்ட நடுவர்:** கோயம்புத்தூர் மாவட்ட நிர்வாகத்தின் தலைமைப் பொறுப்பு வகிக்கிறார். சட்டம் ஒழுங்கு, வருவாய் நிர்வாகம், தேர்தல் மற்றும் வளர்ச்சித் திட்டங்களை ஒருங்கிணைக்கிறார்.',
+            `• **மாவட்ட ஆட்சியரகம் முகவரி:** ${COIMBATORE_ADMIN_CORE.collectorateAddressTa}`,
+            `• **தொலைபேசி எண்:** ${COIMBATORE_ADMIN_CORE.collectoratePhone}`,
+            `• **பேரிடர் கட்டுப்பாட்டு அறை:** ${COIMBATORE_ADMIN_CORE.disasterControlRoom}`,
+            `• **அதிகாரப்பூர்வ தளம்:** ${COIMBATORE_ADMIN_CORE.officialPortal}`,
+            '',
+            '**பொதுமக்கள் குறைதீர்ப்பு நடைமுறைகள்:**',
+            '• **வாராந்திர மனுநீதி நாள் (மக்கள் குறைதீர்க்கும் கூட்டம்):** ஒவ்வொரு திங்கட்கிழமையும் காலை 10:00 மணிக்கு மாவட்ட ஆட்சியர் தலைமையில் ஆட்சியரக கூட்டரங்கில் நேரடியாக மனுக்கள் பெறப்பட்டு உடனடியாக நடவடிக்கை எடுக்கப்படுகிறது.',
+            '• **விவசாயிகள் குறைதீர்க்கும் நாள்:** மாதத்தின் 3-வது வெள்ளிக்கிழமை ஆட்சியரகத்தில் நடைபெறுகிறது.',
+            '• **முதலமைச்சரின் உதவி மையம்:** 1100 என்ற கட்டணமில்லா எண்ணிலும், முதல்வர் முகவரி இணையதளத்திலும் புகார்களைப் பதிவு செய்யலாம்.',
+            '',
+            '**முக்கிய நிர்வாக அலுவலர்கள்:**',
+            '• மாவட்ட வருவாய் அலுவலர் (DRO) — மாவட்ட வருவாய் நிர்வாகம் மற்றும் நில விவகாரங்கள்.',
+            '• தனித்துணை ஆட்சியர் (சமூகப் பாதுகாப்புத் திட்டம்) — முதியோர், விதவை, ஆதரவற்றோர் ஓய்வூதியத் திட்டங்கள்.',
+            '• வருவாய் கோட்டாட்சியர்கள் (RDO): கோவை வடக்கு, கோவை தெற்கு, பொள்ளாச்சி (சார் ஆட்சியர்).',
+          ].join('\n');
+        }
+
+        if (/(corporation|ccmc|மாநகராட்சி|ஆணையர்|mayor|மேயர்|மண்டலம்|zone|water|குடிநீர்|வரி|tax)/i.test(lowerQ)) {
+          return [
+            '### கோயம்புத்தூர் மாநகராட்சி (CCMC) — குடிமைப் பணிகள் & வழிகாட்டி',
+            '',
+            '• **மாநகராட்சி அமைப்பு:** 1981-ல் தொடங்கப்பட்டது. 100 வார்டுகள் மற்றும் 5 நிர்வாக மண்டலங்களாகப் பிரிக்கப்பட்டுள்ளது (கிழக்கு, மேற்கு, வடக்கு, தெற்கு, மத்திய மண்டலங்கள்).',
+            '• **தலைமை அலுவலகம்:** ராஜா வீதி, டவுன்ஹால், கோயம்புத்தூர் - 641001.',
+            '• **நிர்வாகத் தலைமை:** மாமன்ற மேயர், மாநகராட்சி ஆணையர் (IAS), மற்றும் துணை மேயர்.',
+            `• **24x7 பொதுமக்கள் குறைதீர்ப்பு உதவி எண்:** ${COIMBATORE_ADMIN_CORE.ccmcHelpline}`,
+            '',
+            '**முக்கிய குடிமை சேவைகள்:**',
+            '• **குடிநீர் விநியோகம்:** சிறுவாணி அணை (சுவையான இயற்கை கனிம நீர்), பில்லூர் திட்டம் I, II, III மற்றும் ஆழியாறு கூட்டுக்குடிநீர்த் திட்டங்கள் மூலம் விநியோகம் செய்யப்படுகிறது.',
+            '• **பிறப்பு மற்றும் இறப்பு சான்றிதழ்:** crsorgi.gov.in மற்றும் மாநகராட்சி மண்டல அலுவலகங்கள் மூலம் வழங்கப்படுகிறது.',
+            '• **சொத்து வரி & தொழில் வரி:** ccmc.gov.in இணையதளம் வாயிலாக ஆன்லைனில் எளிதாக செலுத்தலாம்.',
+            '• **கட்டட வரைபட அனுமதி & பாதாள சாக்கடை திட்டம்:** ஒற்றைச் சாளர முறையில் ஆன்லைன் விண்ணப்பங்கள் கையாளப்படுகின்றன.',
+          ].join('\n');
+        }
+
+        if (/(police|காவல்|commissioner|கண்காணிப்பாளர்|\bsp\b|cop|crime|குற்றம்|station)/i.test(lowerQ)) {
+          return [
+            '### கோயம்புத்தூர் காவல் துறை நிர்வாகம் & அவசர உதவி வழிகாட்டி',
+            '',
+            '• **கோவை மாநகர காவல் ஆணையரகம்:**',
+            '  - காவல் ஆணையர் (Commissioner of Police - ADGP/IGP தரம்) தலைமையில் மாநகர எல்லைக்குட்பட்ட காவல் நிலையங்கள், சட்டம் ஒழுங்கு, குற்றப்பிரிவு மற்றும் போக்குவரத்து பிரிவுகள் செயல்படுகின்றன.',
+            '  - தலைமையகம்: பழைய தபால் நிலைய சாலை, ஹுசூர் ரோடு, கோயம்புத்தூர்.',
+            '• **கோவை மாவட்டக் காவல் (ஊரகம்):**',
+            '  - மாவட்ட காவல் கண்காணிப்பாளர் (SP Coimbatore Rural) தலைமையில் பொள்ளாச்சி, மேட்டுப்பாளையம், சூலூர், அன்னூர், வால்பாறை உள்ளிட்ட ஊரகப் பகுதிகள் செயல்படுகின்றன.',
+            '',
+            '**அவசர உதவி எண்கள்:**',
+            `• காவல் கட்டுப்பாட்டு அறை: ${COIMBATORE_ADMIN_CORE.policeControlRoom}`,
+            `• பெண்கள் அவசர உதவி எண்: ${COIMBATORE_ADMIN_CORE.womenHelpline}`,
+            `• சைபர் கிரைம் நிதி மோசடி புகார்: ${COIMBATORE_ADMIN_CORE.cyberCrime}`,
+            `• குழந்தைகள் பாதுகாப்பு உதவி: ${COIMBATORE_ADMIN_CORE.childline}`,
+            '• இணையவழி புகார்களுக்கு: eservices.tnpolice.gov.in',
+          ].join('\n');
+        }
+
+        if (/(taluk|வட்டம்|தாலுகா|tahsildar|வட்டாட்சியர்)/i.test(lowerQ)) {
+          return [
+            '### கோயம்புத்தூர் மாவட்டத்தின் 11 வருவாய் வட்டங்கள் (தாலுகாக்கள்)',
+            '',
+            '1. **கோயம்புத்தூர் வடக்கு** — பாலசுந்தரம் சாலை (கோவை வடக்கு வருவாய் கோட்டம்)',
+            '2. **கோயம்புத்தூர் தெற்கு** — ஹுசூர் ரோடு (கோவை தெற்கு வருவாய் கோட்டம்)',
+            '3. **பேரூர்** — சிறுவாணி மெயின் ரோடு, பேரூர்',
+            '4. **மதுக்கரை** — பாலக்காடு மெயின் ரோடு, மதுக்கரை',
+            '5. **சூலூர்** — திருச்சி ரோடு, சூலூர்',
+            '6. **மேட்டுப்பாளையம்** — அன்னூர் ரோடு, மேட்டுப்பாளையம்',
+            '7. **அன்னூர்** — அவிநாசி ரோடு, அன்னூர்',
+            '8. **பொள்ளாச்சி** — சார் ஆட்சியர் அலுவலக வளாகம், பொள்ளாச்சி',
+            '9. **கிணத்துக்கடவு** — பொள்ளாச்சி மெயின் ரோடு, கிணத்துக்கடவு',
+            '10. **ஆனைமலை** — வேட்டைக்காரன்புதூர் ரோடு, ஆனைமலை',
+            '11. **வால்பாறை** — மெயின் ரோடு, வால்பாறை',
+            '',
+            '**வட்டாட்சியர் அலுவலக சேவைகள்:**',
+            '• பட்டா மாறுதல், சிட்டா நகல், நில அளவீடு (FMB)',
+            '• சாதிச் சான்றிதழ், வருமானச் சான்றிதழ், இருப்பிடச் சான்றிதழ், வாரிசுச் சான்றிதழ் (இ-சேவை மூலமாக)',
+            '• குடும்ப அட்டை (ரேஷன் கார்டு) திருத்தங்கள் மற்றும் புதிய அட்டை விண்ணப்பங்கள்.',
+          ].join('\n');
+        }
+
+        return [
+          '### கோயம்புத்தூர் மாவட்டம் — முழுமையான தகவல் வழிகாட்டி',
+          '',
+          '• **அடையாளம்:** "தென்னிந்தியாவின் மான்செஸ்டர்" மற்றும் தமிழகத்தின் இரண்டாவது மிகப்பெரிய தொழில் நகரம்.',
+          `• **மாவட்ட ஆட்சியரகம்:** ${COIMBATORE_ADMIN_CORE.collectorateAddressTa} (தொலைபேசி: ${COIMBATORE_ADMIN_CORE.collectoratePhone})`,
+          `• **மாநகராட்சி (CCMC):** டவுன்ஹால், கோயம்புத்தூர் (உதவி எண்: ${COIMBATORE_ADMIN_CORE.ccmcHelpline})`,
+          '',
+          '**தொழில் & பொருளாதாரம்:**',
+          '• ஜவுளித் தொழில் மற்றும் பருத்தி நூற்பாலைகள்.',
+          '• இந்தியாவின் 40%+ பம்ப் மற்றும் மோட்டார் தயாரிப்பு.',
+          '• வெட் கிரைண்டர் தயாரிப்பு (புவிசார் குறியீடு GI Tag).',
+          '• டைடல் பார்க் (விளாங்குறிச்சி), எல்காட் செஸ், கொடிசியா வர்த்தக மையம்.',
+          '',
+          '**கல்வி & மருத்துவ நிறுவனங்கள்:**',
+          '• தமிழ்நாடு வேளாண்மைப் பல்கலைக்கழகம் (TNAU), பாரதியார் பல்கலைக்கழகம், அரசு பொறியியல் கல்லூரி (GCT), கோவை அரசு மருத்துவக் கல்லூரி (CMC/CMCH), பி.எஸ்.ஜி. தொழில்நுட்பக் கல்லூரி.',
+          '• கோவை அரசு மருத்துவக் கல்லூரி மருத்துவமனை (CMCH - திருச்சி ரோடு): 1500+ படுக்கைகள், 24 மணி நேர இலவச அவசர சிகிச்சை பிரிவு.',
+          '',
+          '**சுற்றுலா & முக்கிய இடங்கள்:**',
+          '• மருதமலை முருகன் கோயில், பேரூர் பட்டீஸ்வரர் கோயில், ஈச்சனாரி விநாயகர் கோயில்.',
+          '• சிறுவாணி அணை மற்றும் அருவி (சுவையான இயற்கை குடிநீர்), கோவைக் குற்றாலம்.',
+          '• ஈஷா யோகா மையம் (112 அடி ஆதியோகி சிலை, வெள்ளியங்கிரி மலை அடிவாரம்).',
+          '• ஆனைமலை புலிகள் காப்பகம், டாப்ஸ்லிப், வால்பாறை மலைவாசஸ்தலம், ஜி.டி. நாயுடு அருங்காட்சியகம்.',
+          '',
+          '**போக்குவரத்து வசதிகள்:**',
+          '• சர்வதேச விமான நிலையம் (பீளமேடு - CJB), கோவை சந்திப்பு ரயில் நிலையம் (CBE).',
+          '• காந்திபுரம், உக்கடம், சிங்காநல்லூர், மேட்டுப்பாளையம் சாலை பேருந்து நிலையங்கள்.',
+        ].join('\n');
+      } else {
+        // English
+        if (/(collector|district\s*collector|collectorate|dro|magistrate)/i.test(lowerQ)) {
+          return [
+            '### Coimbatore District Administration & Collectorate Guide',
+            '',
+            '• **District Collector & District Magistrate:** Head of District Administration responsible for general administration, revenue, law and order, land records, disaster management, and welfare implementation.',
+            `• **Collectorate Address:** ${COIMBATORE_ADMIN_CORE.collectorateAddressEn}`,
+            `• **Office Landline:** ${COIMBATORE_ADMIN_CORE.collectoratePhone}`,
+            `• **Disaster Management Helpline:** ${COIMBATORE_ADMIN_CORE.disasterControlRoom}`,
+            `• **Official Portal:** ${COIMBATORE_ADMIN_CORE.officialPortal}`,
+            '',
+            '**Public Grievance Redressal Days:**',
+            '• **Monday Public Grievance Day:** Conducted every Monday at 10:00 AM in the Collectorate Hall chaired directly by the District Collector. Citizens can submit petitions directly with fast-track disposal.',
+            '• **Farmers Grievance Day:** Held every 3rd Friday of the month for agrarian and irrigation matters.',
+            '• **Chief Minister Helpline (1100):** 24x7 toll-free public grievance logging with tracking.',
+            '',
+            '**Key Administrative Officials:**',
+            '• District Revenue Officer (DRO) – Revenue administration, patta appeals, and statutory inquiries.',
+            '• Revenue Divisional Officers (RDOs): Coimbatore North, Coimbatore South, Pollachi (Sub-Collector).',
+          ].join('\n');
+        }
+
+        if (/(corporation|ccmc|mayor|commissioner|zone|zones|ward|water|tax)/i.test(lowerQ)) {
+          return [
+            '### Coimbatore City Municipal Corporation (CCMC) — Civic Services',
+            '',
+            '• **Overview:** Upgraded to Municipal Corporation in 1981, covering 100 wards structured into 5 administrative zones (East, West, North, South, Central).',
+            '• **Head Office:** Raja Street, Town Hall, Coimbatore - 641001.',
+            '• **Key Leadership:** Mayor, Corporation Commissioner (IAS), and Deputy Mayor.',
+            `• **24x7 Civic Grievance Helpline:** ${COIMBATORE_ADMIN_CORE.ccmcHelpline}`,
+            '',
+            '**Essential Civic Services:**',
+            '• **Water Supply:** Managed from Siruvani Dam (acclaimed for mineral sweetness), Pillur Scheme I, II & III, and Aliyar scheme.',
+            '• **Birth & Death Registration:** Available online through crsorgi.gov.in and respective Zonal Offices.',
+            '• **Property Tax & Professional Tax:** Seamless digital payment via the official municipal portal ccmc.gov.in.',
+            '• **Building Plan Approvals & Underground Drainage (UGD):** Handled through single-window clearances.',
+          ].join('\n');
+        }
+
+        if (/(police|cop|commissioner|superintendent|\bsp\b|crime|station|emergency)/i.test(lowerQ)) {
+          return [
+            '### Coimbatore Police Administration & Emergency Contacts',
+            '',
+            '• **Coimbatore City Police Commissionerate:**',
+            '  - Headed by the Commissioner of Police (CoP - ADGP/IGP rank) overseeing law and order, traffic management, crime detection, and women safety in city limits.',
+            '  - Headquarters: Old Post Office Road, Huzur Road, Coimbatore.',
+            '• **Coimbatore District Police (Rural):**',
+            '  - Headed by the Superintendent of Police (SP Coimbatore Rural) overseeing taluk jurisdictions including Pollachi, Mettupalayam, Sulur, Annur, and Valparai.',
+            '',
+            '**Emergency & Helpline Numbers:**',
+            `• Police Emergency Control Room: ${COIMBATORE_ADMIN_CORE.policeControlRoom}`,
+            `• Women Helpline: ${COIMBATORE_ADMIN_CORE.womenHelpline}`,
+            `• Cyber Crime Helpline: ${COIMBATORE_ADMIN_CORE.cyberCrime}`,
+            `• Child Helpline: ${COIMBATORE_ADMIN_CORE.childline}`,
+            '• Citizen Online Services & FIR Status: eservices.tnpolice.gov.in',
+          ].join('\n');
+        }
+
+        if (/(taluk|taluks|tahsildar)/i.test(lowerQ)) {
+          return [
+            '### 11 Revenue Taluks of Coimbatore District',
+            '',
+            '1. **Coimbatore North** — Balasundaram Road, Coimbatore (Coimbatore North Division)',
+            '2. **Coimbatore South** — Huzur Road, Coimbatore (Coimbatore South Division)',
+            '3. **Perur** — Siruvani Main Road, Perur',
+            '4. **Madukkarai** — Palakkad Main Road, Madukkarai',
+            '5. **Sulur** — Trichy Road, Sulur',
+            '6. **Mettupalayam** — Annur Road, Mettupalayam',
+            '7. **Annur** — Avinashi Road, Annur',
+            '8. **Pollachi** — Sub-Collector Office Campus, Pollachi',
+            '9. **Kinathukadavu** — Pollachi Main Road, Kinathukadavu',
+            '10. **Anaimalai** — Vettaikaranpudur Road, Anaimalai',
+            '11. **Valparai** — Main Road, Valparai',
+            '',
+            '**Tahsildar Office Services:**',
+            '• Patta transfers, Chitta extracts, FMB sketch measurements.',
+            '• Community, Income, Nativity, First Graduate, and Legal Heir certificates via e-Sevai.',
+            '• Smart Ration Card issuance and family member updates.',
+          ].join('\n');
+        }
+
+        return [
+          '### Coimbatore District — Comprehensive City & Administrative Profile',
+          '',
+          '• **Identity:** Known as the "Manchester of South India" and the second largest economic hub in Tamil Nadu.',
+          `• **Collectorate:** ${COIMBATORE_ADMIN_CORE.collectorateAddressEn} (Phone: ${COIMBATORE_ADMIN_CORE.collectoratePhone})`,
+          `• **Civic Body:** Coimbatore City Municipal Corporation, Town Hall (Helpline: ${COIMBATORE_ADMIN_CORE.ccmcHelpline})`,
+          '',
+          '**Economy & Industries:**',
+          '• Textile powerhouse with world-class spinning and weaving mills.',
+          '• Manufactures over 40% of India’s submersible pumps and electric motors.',
+          '• Table-top wet grinder industry holds registered Geographical Indication (GI Tag).',
+          '• Precision auto-components, foundries, gold jewelry craftsmanship, and IT parks (TIDEL Park Coimbatore, ELCOT SEZ, CODISSIA trade fair center).',
+          '',
+          '**Major Educational & Healthcare Centers:**',
+          '• Tamil Nadu Agricultural University (TNAU), Bharathiar University, Government College of Technology (GCT), Coimbatore Medical College (CMC), PSG Tech.',
+          '• Coimbatore Medical College Hospital (CMCH, Trichy Road): 1,500+ beds, 24/7 free tertiary care, trauma center, and CMCHIS services.',
+          '',
+          '**Prominent Tourism & Cultural Landmarks:**',
+          '• Marudhamalai Murugan Temple, Perur Pateeswarar Temple, Eachanari Vinayagar Temple.',
+          '• Siruvani Dam and Waterfalls (famed mineral water), Kovai Kutralam.',
+          '• Isha Yoga Center / 112-ft Adiyogi Statue at the Velliangiri Foothills.',
+          '• Anamalai Tiger Reserve (Topslip), Valparai hill station, Gedee Car Museum.',
+          '',
+          '**Connectivity & Transit:**',
+          '• Coimbatore International Airport (Peelamedu - CJB), Coimbatore Junction (CBE).',
+          '• Major bus terminals: Gandhipuram (SETC/Mofussil), Ukkadam, Singanallur, and Mettupalayam Road.',
+        ].join('\n');
       }
     }
 

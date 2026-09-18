@@ -58,10 +58,20 @@ const OFFICIAL_DOMAINS = [
   'indiacode.nic.in',                // central and state Acts
   'egazette.gov.in',
   'coimbatore.nic.in',
+  'ccmc.gov.in',
+  'tnpolice.gov.in',
+  'coimbatorecitypolice.com',
+  'cbe.tn.gov.in',
   'eservices.tn.gov.in',
   'edistricts.tn.gov.in',
   'tnreginet.gov.in',
   'twadboard.tn.gov.in',
+  'tnstc.in',
+  'cmch.ac.in',
+  'tnhealth.tn.gov.in',
+  'tnau.ac.in',
+  'b-u.ac.in',
+  'gct.ac.in',
 ];
 
 function isOfficial(url: string): boolean {
@@ -124,8 +134,8 @@ export function isGovQuery(q: string): boolean {
     return false;
   }
 
-  return /\b(government|govt|tamil\s*nadu|tn|chief\s*minister|cm|minister|governor|collector|department|dept|scheme|subsidy|welfare|government\s*order|g\.o\.|g\.o\.ms|goms|gazette|statutory\s*act|act\b|section|rule|rules|law|court|petition|grievance|pension|patta|chitta|adangal|fmb|fir|ration|aadhaar|district|districts|taluk|village|panchayat|municipality|corporation|tahsildar|rdo|bdo|dro|commissioner|workflow|portal|kmut|magalir|urimai|breakfast|pudhumai|mudhalvan|innuyir|jamabandi|1100|mugavari|certificate|certificates|community|income|nativity|legal\s*heir|destitute|first\s*graduate|esevai|e-sevai|tnega|tnreginet|guideline\s*value|registration)\b/i.test(q)
-    || /(அரசு|தமிழ்நாடு|முதலமைச்சர்|அமைச்சர்|ஆட்சியர்|துறை|திட்டம்|மானியம்|அரசாணை|சட்டம்|விதி|பிரிவு|மனு|பட்டா|சிட்டா|அடங்கல்|மாவட்டம்|வட்டம்|கிராமம்|ஊராட்சி|பேரூராட்சி|நகராட்சி|மாநகராட்சி|வட்டாட்சியர்|முகவரி|ஜமாபந்தி|சான்றிதழ்|வாரிசு|வருமானம்|சாதி|இருப்பிடம்|இ-சேவை|பதிவுத்துறை)/.test(q);
+  return /\b(government|govt|tamil\s*nadu|tn|chief\s*minister|cm|minister|governor|collector|department|dept|scheme|subsidy|welfare|government\s*order|g\.o\.|g\.o\.ms|goms|gazette|statutory\s*act|act\b|section|rule|rules|law|court|petition|grievance|pension|patta|chitta|adangal|fmb|fir|ration|aadhaar|district|districts|taluk|village|panchayat|municipality|corporation|tahsildar|rdo|bdo|dro|commissioner|workflow|portal|kmut|magalir|urimai|breakfast|pudhumai|mudhalvan|innuyir|jamabandi|1100|mugavari|certificate|certificates|community|income|nativity|legal\s*heir|destitute|first\s*graduate|esevai|e-sevai|tnega|tnreginet|guideline\s*value|registration|coimbatore|ccmc|pollachi|mettupalayam|valparai|sulur|annur|kinathukadavu|madukkarai|anaimalai|perur)\b/i.test(q)
+    || /(அரசு|தமிழ்நாடு|முதலமைச்சர்|அமைச்சர்|ஆட்சியர்|துறை|திட்டம்|மானியம்|அரசாணை|சட்டம்|விதி|பிரிவு|மனு|பட்டா|சிட்டா|அடங்கல்|மாவட்டம்|வட்டம்|கிராமம்|ஊராட்சி|பேரூராட்சி|நகராட்சி|மாநகராட்சி|வட்டாட்சியர்|முகவரி|ஜமாபந்தி|சான்றிதழ்|வாரிசு|வருமானம்|சாதி|இருப்பிடம்|இ-சேவை|பதிவுத்துறை|கோயம்புத்தூர்|கோவை|காவல்)/.test(q);
 }
 
 // ============================================================ Multi-Source Deep Search

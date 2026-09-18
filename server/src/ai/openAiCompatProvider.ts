@@ -91,7 +91,7 @@ const VENDORS: Record<CompatVendor, VendorSpec> = {
   },
 };
 
-const GROQ_MODEL_FALLBACKS = ['openai/gpt-oss-120b', 'qwen/qwen3.8-27b'];
+const GROQ_MODEL_FALLBACKS = ['openai/gpt-oss-120b', 'llama-3.3-70b-versatile', 'qwen/qwen3.8-27b'];
 
 export class OpenAiCompatProvider extends BaseLiveProvider {
   readonly name: string;

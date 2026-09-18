@@ -63,6 +63,12 @@ function cleanAssistantText(text: string): string {
   let cleaned = text;
   // Strip trailing AI disclaimers
   cleaned = cleaned.replace(/—\s*(?:This is an AI-generated answer|இது AI உருவாக்கிய பதில்|Idhu AI generate panna bathil).*$/gim, '');
+  // Strip markdown links [Text](url) -> Text
+  cleaned = cleaned.replace(/\[([^\]]+)\]\(https?:\/\/[^\s)]+\)/g, '$1');
+  // Strip bare URLs
+  cleaned = cleaned.replace(/https?:\/\/[^\s)]+/gi, '');
+  // Strip trailing citation or sources headers
+  cleaned = cleaned.replace(/(?:Sources?|References?|Official Portals?|Official Links?|ஆதாரங்கள்|இணையதளங்கள்)[:\s]*$/gim, '');
   // Clean up excess blank lines
   cleaned = cleaned.replace(/\n{3,}/g, '\n\n').trim();
   return cleaned;
@@ -248,23 +254,7 @@ function renderInlineText(text: string): React.ReactNode[] {
     }
     const linkMatch = part.match(/^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)$/);
     if (linkMatch) {
-      return (
-        <a
-          key={i}
-          href={linkMatch[2]}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="copilot-citation-link"
-          style={{
-            color: 'var(--copilot-accent, #2563eb)',
-            textDecoration: 'underline',
-            textUnderlineOffset: '3px',
-            fontWeight: 500,
-          }}
-        >
-          {linkMatch[1]} ↗
-        </a>
-      );
+      return <span key={i} className="copilot-inline-ref">{linkMatch[1]}</span>;
     }
     return <span key={i}>{part}</span>;
   });
@@ -1215,28 +1205,6 @@ export function CopilotAgentView({
                           {sourceIcon(src.type)} {src.label}
                         </span>
                       ))}
-                  </div>
-                )}
-
-                {/* Grounding Web Source Badges from Real-Time Search */}
-                {m.role === 'ASSISTANT' && !m.error && m.webSources && m.webSources.length > 0 && (
-                  <div className="copilot-sources-strip" style={{ marginTop: '0.4rem' }}>
-                    <span className="copilot-sources-heading">
-                      {lang === 'ta' ? '🌐 சரிபார்க்கப்பட்ட இணையதளங்கள்:' : '🌐 Verified Sources:'}
-                    </span>
-                    {m.webSources.slice(0, 4).map((src: any, i: number) => (
-                      <a
-                        key={i}
-                        href={src.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="copilot-src-pill src-web"
-                        title={`${src.title}\n${src.url}`}
-                        style={{ textDecoration: 'none', cursor: 'pointer' }}
-                      >
-                        🌐 {src.source || 'Official Source'} ↗
-                      </a>
-                    ))}
                   </div>
                 )}
 
